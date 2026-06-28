@@ -4,7 +4,7 @@ return {
   desc = "Mapa y waypoints",
   run = function(ctx)
     local ui = ctx.ui
-    local geo = require("geo")
+    local geo = ctx.geo
 
     if not peripheral.find("modem") then
       ui.clear(); ui.titleBar("GPS")

@@ -5,6 +5,7 @@ local log = require("log")
 local config = require("config")
 local appreg = require("appreg")
 local text = require("text")
+local geo = require("geo")
 
 local kernel = { version = "0.1.0", pending = nil }
 local APP_DIR = "/os/apps"
@@ -34,7 +35,7 @@ end
 local function makeCtx(app)
   local w, h = term.getSize()
   return {
-    ui = ui, term = term, width = w, height = h,
+    ui = ui, term = term, width = w, height = h, geo = geo,
     log = function(msg) log.app(app.id, msg) end,
     config = {
       get = function(k, d) return config.get(app.id, k, d) end,
