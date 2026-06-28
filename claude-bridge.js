@@ -26,6 +26,7 @@ const { spawn } = require("child_process");
 const { toTerminalAscii } = require("./bridge/ascii");
 const { buildManifest } = require("./bridge/manifest");
 const { installScript } = require("./bridge/install");
+const { safeFsPath } = require("./bridge/fspath");
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const WORKDIR = process.env.CLAUDE_WORKDIR || process.cwd();
@@ -92,12 +93,8 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (req.method === "GET" && req.url.startsWith("/fs/")) {
-    const rel = decodeURIComponent(req.url.slice("/fs/".length));
-    const abs = path.resolve(DIST_DIR, rel);
-    if (abs !== DIST_DIR && !abs.startsWith(DIST_DIR + path.sep)) {
-      res.writeHead(404).end("nope");
-      return;
-    }
+    const abs = safeFsPath(DIST_DIR, req.url.slice("/fs/".length));
+    if (!abs) { res.writeHead(404).end("nope"); return; }
     fs.readFile(abs, (e, data) => {
       if (e) { res.writeHead(404).end("not found"); return; }
       res.writeHead(200, { "Content-Type": "text/plain" });
