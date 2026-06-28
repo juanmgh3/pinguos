@@ -49,16 +49,20 @@ no tool or unknown. (To verify the exact returned shape in-game before relying o
 - `compare()` -> "is the block ahead the same as my reference item" (cheap filter).
 - `getItemDetail()` -> inventory-aware decisions (out of saplings? full? need fuel?).
 
-## Current state in code (to expand)
+## Current state in code
 
-- Agent (`bridge/install.js` turtleAgentScript) supports actions: move x6, dig/digUp/
-  digDown, attack/attackUp/attackDown, refuel, status, and the `mine N` tunnel task.
-- Roles wired in the Fleet app + agent: **mineria, ataque, cava, generico**.
-- **Missing roles to add:** tala (axe), excavacion (shovel), granja (hoe), transporte.
-- **Missing composed tasks:** fell-tree, tree-farm, crop-loop, dig-down N, haul.
-- **Possible upgrade:** auto-detect role from `getEquippedLeft/Right` (drop the prompt).
+Rebuilt as the **autonomous fleet** (see `fleet-autonomy.md`). The agent is no longer
+a JS string; it is real Lua under `turtle/` (agent + lib + jobs), installed to `/pingu/`
+on the turtle via a mini-installer, and runs whole **jobs** on its own.
+
+- Role auto-detected from the equipped tool (`getEquippedLeft/Right`), prompt fallback.
+- Jobs shipped: `branch-mine`, `dig-down` (mineria); `fell-tree`, `tree-farm` (tala);
+  `crop-loop` (granja); `goto` (any). Manual D-pad kept as debug.
+- Stays responsive mid-job via `parallel` (answers status, obeys `cancel`).
+- **Still missing (later):** excavacion/transporte jobs, haul, builder/blueprint,
+  job queues, pathfinding, resume-across-reboot.
 
 ## Roadmap (build on the `pingufleet` protocol)
 
-Each automation = a composed `cmd` action the agent runs in a loop and reports `done`.
-Order by usefulness: tunnel (done) -> fell-tree -> dig-down -> crop-loop -> haul.
+Each automation = a `job` the agent runs in a loop, reporting `progress` then `done`.
+Next up by usefulness: excavacion (`clear-area`) -> haul (transporte) -> builder.
