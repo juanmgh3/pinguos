@@ -25,7 +25,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { toTerminalAscii } = require("./bridge/ascii");
 const { buildManifest } = require("./bridge/manifest");
-const { installScript } = require("./bridge/install");
+const { installScript, gpsHostScript } = require("./bridge/install");
 const { safeFsPath } = require("./bridge/fspath");
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
@@ -90,6 +90,11 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && req.url === "/install") {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end(installScript(`http://127.0.0.1:${PORT}`));
+    return;
+  }
+  if (req.method === "GET" && req.url === "/gpshost") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end(gpsHostScript());
     return;
   }
   if (req.method === "GET" && req.url.startsWith("/fs/")) {

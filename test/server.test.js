@@ -73,6 +73,13 @@ test("GET /install returns a lua bootstrap", async () => {
   assert.match(r.body, /os\.reboot\(\)/);
 });
 
+test("GET /gpshost returns a GPS host setup script", async () => {
+  const r = await get("/gpshost");
+  assert.equal(r.code, 200);
+  assert.match(r.body, /gps/);
+  assert.match(r.body, /startup\.lua/);
+});
+
 test("POST chat requires application/json (anti-CSRF)", async () => {
   const r = await post("/", "hola", { "Content-Type": "text/plain" });
   assert.equal(r.code, 415);
