@@ -9,4 +9,13 @@ T.ok(fleet.is(fleet.discover(), "discover"), "is discover")
 T.ok(not fleet.is({ t = "x" }, "discover"), "is wrong type")
 T.ok(not fleet.is("nope", "discover"), "is non-table")
 T.ok(fleet.isAction("dig"), "valid action")
+T.ok(fleet.isAction("attack"), "attack is a manual action")
 T.ok(not fleet.isAction("explode"), "invalid action")
+
+-- autonomy layer
+T.eq(fleet.job("branch-mine", { depth = 10 }).t, "job", "job type")
+T.eq(fleet.job("branch-mine", { depth = 10 }).job, "branch-mine", "job id")
+T.eq(type(fleet.job("goto").params), "table", "job params defaults to a table")
+T.ok(fleet.is(fleet.cancel(), "cancel"), "cancel is a cancel message")
+T.eq(fleet.progress("branch-mine", 50, "tunel").pct, 50, "progress carries pct")
+T.eq(fleet.catalog({}).t, "catalog", "catalog type")

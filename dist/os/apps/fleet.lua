@@ -1,10 +1,13 @@
--- dist/os/apps/fleet.lua  -- command center for connected turtles (role-aware)
+-- dist/os/apps/fleet.lua  -- mission control for the autonomous turtle fleet.
+-- Live dashboard + per-turtle job dispatcher (driven by each turtle's own catalog)
+-- + cancel. The old manual D-pad survives as a "debug" submenu.
 return {
   id = "fleet", name = "Fleet", icon = "T", color = colors.brown,
   desc = "Controlar turtles",
   run = function(ctx)
     local ui = ctx.ui
     local fleet = ctx.fleet
+    local w, h = term.getSize()
 
     local modemSide
     for _, s in ipairs(peripheral.getNames()) do
@@ -18,81 +21,180 @@ return {
     end
     rednet.open(modemSide)
 
+    ---- fleet state ----------------------------------------------------------
     local turtles = {}
     local function ids()
       local list = {}
       for id in pairs(turtles) do list[#list + 1] = id end
       table.sort(list); return list
     end
+
     local function ingest(id, msg)
       if type(msg) ~= "table" then return end
-      if msg.t == "hello" or msg.t == "status" or msg.t == "done" then
-        local p = turtles[id] or {}
-        turtles[id] = { name = msg.name or p.name, role = msg.role or p.role,
-                        fuel = msg.fuel or p.fuel, pos = msg.pos or p.pos }
+      if not (msg.t == "hello" or msg.t == "status" or msg.t == "done" or msg.t == "progress") then return end
+      local p = turtles[id] or {}
+      p.name = msg.name or p.name
+      p.role = msg.role or p.role
+      if msg.fuel ~= nil then p.fuel = msg.fuel end
+      if msg.pos ~= nil then p.pos = msg.pos end
+      if msg.inv ~= nil then p.inv = msg.inv end
+      if msg.catalog then p.catalog = msg.catalog end
+      if msg.status then p.status = msg.status end
+      if msg.t == "progress" then
+        p.status = "working"; p.job = msg.job
+        p.prog = { pct = msg.pct or 0, info = msg.info or "" }
+      elseif msg.t == "done" then
+        p.status = "idle"; p.job = nil; p.prog = nil
+        p.result = (msg.ok and "OK: " or "fallo: ") ..
+          tostring(msg.job or msg.action or "") .. " " .. (msg.info or "")
+      else -- hello / status
+        p.job = msg.job
+        if not msg.job then p.prog = nil end
       end
+      turtles[id] = p
     end
 
-    local function prompt(title, q)
-      ui.clear(); ui.titleBar(title)
-      ui.text(2, 3, q, colors.white, colors.black)
-      term.setCursorPos(2, 5); term.setTextColor(colors.white)
-      return read()
+    ---- visuals --------------------------------------------------------------
+    local function statusColor(s)
+      if s == "working" then return colors.cyan
+      elseif s == "blocked" then return colors.red
+      elseif s == "nofuel" then return colors.orange
+      else return colors.white end
     end
 
-    local function menuFor(role)
-      local c = {
-        { "Adelante", "forward" }, { "Atras", "back" }, { "Sube", "up" },
-        { "Baja", "down" }, { "Gira Izq", "left" }, { "Gira Der", "right" },
+    local function drawBar(x, y, bw, pct, col)
+      pct = math.max(0, math.min(100, pct or 0))
+      ui.fill(x, y, bw, 1, colors.gray)
+      local filled = math.floor(bw * pct / 100)
+      if filled > 0 then ui.fill(x, y, filled, 1, col or ui.theme.accent) end
+    end
+
+    local function bigButton(x, y, label, bg)
+      local s = " " .. label .. " "
+      ui.text(x, y, s, ui.theme.barFg, bg or ui.theme.accent)
+      return { x = x, y = y, w = #s, h = 1 }
+    end
+
+    ---- small input helpers --------------------------------------------------
+    local function promptParams(job)
+      local params = {}
+      for _, p in ipairs(job.params or {}) do
+        ui.clear(); ui.titleBar(job.label or job.id)
+        ui.text(2, 3, p.label or p.name, colors.white, colors.black)
+        ui.text(2, 4, "(enter = " .. tostring(p.default) .. ")", colors.lightGray, colors.black)
+        term.setCursorPos(2, 6); term.setTextColor(colors.white)
+        local raw = read()
+        local v = (raw == nil or raw == "") and p.default or raw
+        if type(p.default) == "number" then v = tonumber(v) or p.default end
+        params[p.name] = v
+      end
+      return params
+    end
+
+    ---- manual D-pad (debug) -------------------------------------------------
+    local function manualMenu(id)
+      local layout = {
+        { "Adelante", "forward" }, { "Atras", "back" },
+        { "Sube", "up" }, { "Baja", "down" },
+        { "Izq", "left" }, { "Der", "right" },
+        { "Cava", "dig" }, { "CavaAb", "digDown" },
+        { "Ataca", "attack" },
       }
-      local tunnel = false
-      if role == "ataque" then
-        c[#c + 1] = { "Atacar", "attack" }; c[#c + 1] = { "Atacar arr", "attackUp" }; c[#c + 1] = { "Atacar aba", "attackDown" }
-      elseif role == "mineria" then
-        c[#c + 1] = { "Cava", "dig" }; tunnel = true
-      elseif role == "cava" then
-        c[#c + 1] = { "Cava", "dig" }; c[#c + 1] = { "Cava arr", "digUp" }; c[#c + 1] = { "Cava aba", "digDown" }
-      else
-        c[#c + 1] = { "Cava", "dig" }; c[#c + 1] = { "Atacar", "attack" }; tunnel = true
-      end
-      c[#c + 1] = { "Recarga", "refuel" }
-      return c, tunnel
-    end
-
-    local function commandMenu(id)
       local result = ""
       while true do
-        local t = turtles[id] or {}
-        local cmds, tunnel = menuFor(t.role)
         ui.clear()
-        local close = ui.titleBar("Turtle #" .. id .. " [" .. (t.role or "?") .. "]")
-        ui.text(2, 3, ("%s  fuel:%s"):format(t.name or "?", tostring(t.fuel or "?")), colors.white, colors.black)
+        local close = ui.titleBar("Manual #" .. id)
+        ui.text(2, 2, "modo debug - una orden", colors.lightGray, colors.black)
         local btns = {}
-        for i, a in ipairs(cmds) do
+        for i, a in ipairs(layout) do
           local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-          btns[i] = { r = ui.button(2 + col * 14, 5 + row * 2, a[1]), action = a[2] }
+          btns[i] = { r = ui.button(2 + col * 13, 4 + row * 2, a[1]), action = a[2] }
         end
-        local mineBtn
-        if tunnel then mineBtn = ui.button(2, 5 + math.ceil(#cmds / 2) * 2, "Excavar tunel") end
-        if result ~= "" then ui.text(2, 17, result, ui.theme.accent, colors.black) end
-        ui.statusBar("clic una orden  -  [x] volver a la lista")
+        if result ~= "" then ui.text(2, h - 1, result:sub(1, w - 2), ui.theme.accent, colors.black) end
+        ui.statusBar("clic orden  -  [x] volver")
         local ev = { os.pullEvent() }
         if ev[1] == "rednet_message" and ev[4] == fleet.PROTOCOL then
           ingest(ev[2], ev[3])
           if fleet.is(ev[3], "done") then
-            result = (ev[3].ok and "OK: " or "FALLO: ") .. tostring(ev[3].action) .. " " .. (ev[3].info or "")
+            result = (ev[3].ok and "OK " or "fallo ") .. tostring(ev[3].action or "")
           end
         elseif ev[1] == "mouse_click" then
           if ui.hit(close, ev[3], ev[4]) then return end
-          if mineBtn and ui.hit(mineBtn, ev[3], ev[4]) then
-            local n = tonumber(prompt("Excavar tunel", "Cuantos bloques cavar?"))
-            if n and n > 0 then rednet.send(id, fleet.cmd("mine", n), fleet.PROTOCOL); result = "enviado: tunel " .. n end
+          for _, b in ipairs(btns) do
+            if ui.hit(b.r, ev[3], ev[4]) then
+              rednet.send(id, fleet.cmd(b.action), fleet.PROTOCOL)
+              result = "enviado: " .. b.action
+              if ctx.sound then ctx.sound.click() end
+            end
+          end
+        end
+      end
+    end
+
+    ---- per-turtle command center -------------------------------------------
+    local function jobMenu(id)
+      local timer = os.startTimer(2)
+      while true do
+        local t = turtles[id] or {}
+        ui.clear()
+        local close = ui.titleBar(("Turtle #%d %s"):format(id, t.name or ""))
+        ui.text(2, 3, "rol: " .. (t.role or "?"), colors.lightGray, colors.black)
+        ui.text(2, 4, "estado: " .. (t.status or "?"), statusColor(t.status), colors.black)
+        ui.text(2, 5, ("fuel:%s  inv:%s%%"):format(tostring(t.fuel or "?"), tostring(t.inv or 0)),
+          colors.white, colors.black)
+        if t.pos then
+          ui.text(2, 6, ("pos:%d,%d,%d"):format(t.pos.x, t.pos.y, t.pos.z), colors.lightGray, colors.black)
+        end
+
+        local y = 8
+        local buttons, cancelBtn = {}, nil
+        if t.status == "working" then
+          if t.prog then
+            drawBar(2, y, math.min(w - 8, 18), t.prog.pct, colors.cyan)
+            ui.text(2, y + 1, ((t.prog.pct or 0) .. "%  " .. (t.prog.info or "")):sub(1, w - 2),
+              colors.cyan, colors.black)
+          end
+          cancelBtn = bigButton(2, y + 3, "CANCELAR", colors.red)
+          y = y + 5
+        else
+          ui.text(2, y, "Trabajos:", colors.lightGray, colors.black); y = y + 1
+          for _, job in ipairs(t.catalog or {}) do
+            if y < h - 3 then
+              buttons[#buttons + 1] = { r = ui.button(2, y, job.label or job.id), job = job }
+              y = y + 2
+            end
+          end
+          if not t.catalog or #t.catalog == 0 then
+            ui.text(2, y, "(esperando catalogo...)", colors.lightGray, colors.black); y = y + 2
+          end
+        end
+        local manualBtn = ui.button(2, math.min(y + 1, h - 2), "Manual (debug)")
+        if t.result then ui.text(2, h - 1, t.result:sub(1, w - 2), ui.theme.accent, colors.black) end
+        ui.statusBar("clic  -  [x] volver a la lista")
+
+        local ev = { os.pullEvent() }
+        if ev[1] == "timer" and ev[2] == timer then
+          rednet.broadcast(fleet.discover(), fleet.PROTOCOL); timer = os.startTimer(2)
+        elseif ev[1] == "rednet_message" and ev[4] == fleet.PROTOCOL then
+          ingest(ev[2], ev[3])
+        elseif ev[1] == "mouse_click" then
+          local mx, my = ev[3], ev[4]
+          if ui.hit(close, mx, my) then return end
+          if cancelBtn and ui.hit(cancelBtn, mx, my) then
+            rednet.send(id, fleet.cancel(), fleet.PROTOCOL)
+            turtles[id].result = "cancelando..."
+            if ctx.sound then ctx.sound.click() end
+          elseif ui.hit(manualBtn, mx, my) then
+            manualMenu(id)
           else
-            for _, b in ipairs(btns) do
-              if ui.hit(b.r, ev[3], ev[4]) then
-                rednet.send(id, fleet.cmd(b.action), fleet.PROTOCOL)
-                result = "enviado: " .. b.action
+            for _, b in ipairs(buttons) do
+              if ui.hit(b.r, mx, my) then
+                local params = promptParams(b.job)
+                rednet.send(id, fleet.job(b.job.id, params), fleet.PROTOCOL)
+                turtles[id] = turtles[id] or {}
+                turtles[id].result = "enviado: " .. b.job.id
                 if ctx.sound then ctx.sound.click() end
+                break
               end
             end
           end
@@ -100,28 +202,45 @@ return {
       end
     end
 
-    rednet.broadcast(fleet.discover(), fleet.PROTOCOL)
-    local timer = os.startTimer(2)
-    while true do
+    ---- dashboard ------------------------------------------------------------
+    local function drawDashboard()
       ui.clear()
-      local close = ui.titleBar("Fleet")
       local list = ids()
+      local close = ui.titleBar("Fleet (" .. #list .. ")")
       local rows = {}
       if #list == 0 then
         ui.text(2, 3, "Buscando turtles...", colors.lightGray, colors.black)
-        ui.text(2, 5, "Enciendelas con el agente:", colors.white, colors.black)
+        ui.text(2, 5, "Enciende cada turtle con:", colors.white, colors.black)
         ui.text(2, 6, "wget run .../turtle", colors.lightGray, colors.black)
       else
-        ui.text(2, 2, "Clic en una turtle:", colors.lightGray, colors.black)
-        for i, id in ipairs(list) do
+        local y = 3
+        for _, id in ipairs(list) do
+          if y > h - 2 then break end
           local t = turtles[id]
-          local y = 3 + i
-          ui.text(2, y, ("#%d %s [%s] f:%s"):format(id, t.name or "?", t.role or "?", tostring(t.fuel or "?")),
-            colors.white, colors.black)
-          rows[#rows + 1] = { y = y, id = id }
+          local col = statusColor(t.status)
+          ui.text(2, y, ("#%d %s [%s]"):format(id, t.name or "?", t.role or "?"):sub(1, w - 2),
+            col, colors.black)
+          if t.status == "working" and t.prog then
+            local bw = math.min(w - 10, 14)
+            drawBar(2, y + 1, bw, t.prog.pct, colors.cyan)
+            ui.text(2 + bw + 1, y + 1, (t.prog.pct or 0) .. "%", colors.cyan, colors.black)
+          else
+            ui.text(2, y + 1, ("%s  f:%s inv:%s%%"):format(
+              t.status or "?", tostring(t.fuel or "?"), tostring(t.inv or 0)), colors.lightGray, colors.black)
+          end
+          rows[#rows + 1] = { y1 = y, y2 = y + 1, id = id }
+          y = y + 3
         end
       end
-      ui.statusBar("clic una turtle  -  R rebuscar  -  [x] sale")
+      ui.statusBar("clic turtle  -  R rescan  -  [x] sale")
+      return close, rows
+    end
+
+    ---- main loop ------------------------------------------------------------
+    rednet.broadcast(fleet.discover(), fleet.PROTOCOL)
+    local timer = os.startTimer(2)
+    while true do
+      local close, rows = drawDashboard()
       local ev = { os.pullEvent() }
       if ev[1] == "timer" and ev[2] == timer then
         rednet.broadcast(fleet.discover(), fleet.PROTOCOL); timer = os.startTimer(2)
@@ -130,7 +249,7 @@ return {
       elseif ev[1] == "mouse_click" then
         if ui.hit(close, ev[3], ev[4]) then rednet.close(modemSide); return end
         for _, r in ipairs(rows) do
-          if ev[4] == r.y then commandMenu(r.id); break end
+          if ev[4] >= r.y1 and ev[4] <= r.y2 then jobMenu(r.id); break end
         end
       elseif ev[1] == "key" and ev[2] == keys.r then
         rednet.broadcast(fleet.discover(), fleet.PROTOCOL)
