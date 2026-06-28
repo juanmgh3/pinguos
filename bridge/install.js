@@ -60,4 +60,54 @@ sleep(1); os.reboot()
 `;
 }
 
-module.exports = { installScript, gpsHostScript };
+// Turtle fleet agent: wget run http://127.0.0.1:8080/turtle (run on a turtle).
+function turtleAgentScript() {
+  return `-- PinguOS turtle agent (auto-generated)
+if not turtle then print("Esto es para una TURTLE."); return end
+local PROTOCOL = "pingufleet"
+local function openModem()
+  for _, s in ipairs(peripheral.getNames()) do
+    if peripheral.getType(s) == "modem" then rednet.open(s); return true end
+  end
+  return false
+end
+if not openModem() then print("La turtle no tiene modem."); return end
+local f = fs.open("startup.lua", "w")           -- reconnect on boot
+f.write('shell.run("wget","run","http://127.0.0.1:8080/turtle")\\n')
+f.close()
+local name = os.getComputerLabel() or ("turtle"..os.getComputerID())
+local function pos()
+  local x, y, z = gps.locate(1)
+  if x then return { x = x, y = y, z = z } end
+  return nil
+end
+local function announce(t)
+  rednet.broadcast({ t = t, name = name, fuel = turtle.getFuelLevel(), pos = pos() }, PROTOCOL)
+end
+local actions = {
+  forward = turtle.forward, back = turtle.back, up = turtle.up, down = turtle.down,
+  left = turtle.turnLeft, right = turtle.turnRight,
+  dig = turtle.dig, digUp = turtle.digUp, digDown = turtle.digDown,
+  refuel = function() return turtle.refuel() end, status = function() return true end,
+}
+term.clear(); term.setCursorPos(1, 1)
+print("PinguOS turtle agent: "..name)
+print("Conectada. Esperando ordenes...")
+announce("hello")
+while true do
+  local id, msg = rednet.receive(PROTOCOL, 5)
+  if type(msg) == "table" then
+    if msg.t == "discover" then
+      announce("hello")
+    elseif msg.t == "cmd" and msg.action and actions[msg.action] then
+      local ok = actions[msg.action]() and true or false
+      rednet.send(id, { t = "done", action = msg.action, ok = ok, name = name, fuel = turtle.getFuelLevel(), pos = pos() }, PROTOCOL)
+    end
+  else
+    announce("status")
+  end
+end
+`;
+}
+
+module.exports = { installScript, gpsHostScript, turtleAgentScript };

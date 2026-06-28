@@ -80,6 +80,13 @@ test("GET /gpshost returns a GPS host setup script", async () => {
   assert.match(r.body, /startup\.lua/);
 });
 
+test("GET /turtle returns a turtle agent script", async () => {
+  const r = await get("/turtle");
+  assert.equal(r.code, 200);
+  assert.match(r.body, /pingufleet/);
+  assert.match(r.body, /rednet/);
+});
+
 test("POST chat requires application/json (anti-CSRF)", async () => {
   const r = await post("/", "hola", { "Content-Type": "text/plain" });
   assert.equal(r.code, 415);
