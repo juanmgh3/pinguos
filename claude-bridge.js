@@ -126,6 +126,22 @@ const server = http.createServer((req, res) => {
     res.writeHead(405).end("POST for chat, GET /claude.lua for the client");
     return;
   }
+  // CSRF hardening: this endpoint drives a tool-capable Claude session, so a
+  // malicious web page you visit must not be able to POST to it. Require a JSON
+  // content type (a cross-origin JSON POST triggers a CORS preflight we never
+  // answer, so the browser blocks it) and reject any cross-origin Origin/Referer.
+  // The CC: Tweaked http client sends neither header, so the in-game client is
+  // unaffected.
+  const ctype = req.headers["content-type"] || "";
+  if (!ctype.includes("application/json")) {
+    res.writeHead(415).end("application/json required");
+    return;
+  }
+  const cross = req.headers.origin || req.headers.referer;
+  if (cross && !/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(cross)) {
+    res.writeHead(403).end("cross-origin blocked");
+    return;
+  }
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", async () => {

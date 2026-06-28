@@ -30,6 +30,20 @@ function get(p) {
   });
 }
 
+function post(p, body, headers) {
+  return new Promise((res) => {
+    const r = http.request(
+      { host: "127.0.0.1", port: 8099, path: p, method: "POST", headers },
+      (resp) => {
+        let b = "";
+        resp.on("data", (c) => (b += c));
+        resp.on("end", () => res({ code: resp.statusCode, body: b }));
+      }
+    );
+    r.end(body);
+  });
+}
+
 before(async () => { await start(); });
 after(() => server.close());
 
@@ -57,4 +71,25 @@ test("GET /install returns a lua bootstrap", async () => {
   assert.equal(r.code, 200);
   assert.match(r.body, /\/manifest/);
   assert.match(r.body, /os\.reboot\(\)/);
+});
+
+test("POST chat requires application/json (anti-CSRF)", async () => {
+  const r = await post("/", "hola", { "Content-Type": "text/plain" });
+  assert.equal(r.code, 415);
+});
+
+test("POST chat rejects a cross-origin Origin (anti-CSRF)", async () => {
+  const r = await post("/", JSON.stringify({ reset: true }), {
+    "Content-Type": "application/json",
+    Origin: "http://evil.example",
+  });
+  assert.equal(r.code, 403);
+});
+
+test("POST reset works with application/json from a non-browser client", async () => {
+  const r = await post("/", JSON.stringify({ reset: true }), {
+    "Content-Type": "application/json",
+  });
+  assert.equal(r.code, 200);
+  assert.match(r.body, /borrada/);
 });
