@@ -80,11 +80,31 @@ test("GET /gpshost returns a GPS host setup script", async () => {
   assert.match(r.body, /startup\.lua/);
 });
 
-test("GET /turtle returns a turtle agent script", async () => {
+test("GET /turtle returns the turtle firmware installer", async () => {
   const r = await get("/turtle");
   assert.equal(r.code, 200);
+  assert.match(r.body, /turtle-manifest/); // it pulls the firmware manifest...
+  assert.match(r.body, /\/pingu/);         // ...and installs under /pingu
+});
+
+test("GET /turtle-manifest lists the turtle firmware files", async () => {
+  const r = await get("/turtle-manifest");
+  assert.equal(r.code, 200);
+  const m = JSON.parse(r.body);
+  assert.ok(Array.isArray(m.files));
+  assert.ok(m.files.some((f) => f.path === "/agent.lua"));
+  assert.ok(!m.files.some((f) => f.path.includes("/tests/"))); // tests never shipped
+});
+
+test("GET /turtle-fs serves a turtle file", async () => {
+  const r = await get("/turtle-fs/agent.lua");
+  assert.equal(r.code, 200);
   assert.match(r.body, /pingufleet/);
-  assert.match(r.body, /rednet/);
+});
+
+test("GET /turtle-fs blocks path traversal", async () => {
+  const r = await get("/turtle-fs/%2e%2e/claude-bridge.js");
+  assert.equal(r.code, 404);
 });
 
 test("POST chat requires application/json (anti-CSRF)", async () => {

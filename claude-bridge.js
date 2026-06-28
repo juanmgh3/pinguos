@@ -25,13 +25,14 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { toTerminalAscii } = require("./bridge/ascii");
 const { buildManifest } = require("./bridge/manifest");
-const { installScript, gpsHostScript, turtleAgentScript } = require("./bridge/install");
+const { installScript, gpsHostScript, turtleBootstrapScript } = require("./bridge/install");
 const { safeFsPath } = require("./bridge/fspath");
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const WORKDIR = process.env.CLAUDE_WORKDIR || process.cwd();
 const LUA_PATH = path.join(__dirname, "claude.lua");
 const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, "dist");
+const TURTLE_DIR = process.env.TURTLE_DIR || path.join(__dirname, "turtle");
 const OS_VERSION = process.env.OS_VERSION || "dev";
 
 // Keep replies renderable on the tiny CC terminal. Appended to Claude's normal
@@ -99,7 +100,22 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === "GET" && req.url === "/turtle") {
     res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end(turtleAgentScript());
+    res.end(turtleBootstrapScript(`http://127.0.0.1:${PORT}`));
+    return;
+  }
+  if (req.method === "GET" && req.url === "/turtle-manifest") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(buildManifest(TURTLE_DIR, OS_VERSION)));
+    return;
+  }
+  if (req.method === "GET" && req.url.startsWith("/turtle-fs/")) {
+    const abs = safeFsPath(TURTLE_DIR, req.url.slice("/turtle-fs/".length));
+    if (!abs) { res.writeHead(404).end("nope"); return; }
+    fs.readFile(abs, (e, data) => {
+      if (e) { res.writeHead(404).end("not found"); return; }
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(data);
+    });
     return;
   }
   if (req.method === "GET" && req.url.startsWith("/fs/")) {
