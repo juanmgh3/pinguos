@@ -1,0 +1,12 @@
+-- dist/tests/test_fleet.lua
+local fleet = require("fleet")
+T.eq(fleet.PROTOCOL, "pingufleet", "protocol name")
+T.eq(fleet.hello("dig1", 500).t, "hello", "hello type")
+T.eq(fleet.hello("dig1", 500).name, "dig1", "hello name")
+T.eq(fleet.cmd("forward").action, "forward", "cmd action")
+T.eq(fleet.done("dig", true, "ok").ok, true, "done ok")
+T.ok(fleet.is(fleet.discover(), "discover"), "is discover")
+T.ok(not fleet.is({ t = "x" }, "discover"), "is wrong type")
+T.ok(not fleet.is("nope", "discover"), "is non-table")
+T.ok(fleet.isAction("dig"), "valid action")
+T.ok(not fleet.isAction("explode"), "invalid action")
