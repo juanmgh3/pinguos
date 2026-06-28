@@ -93,12 +93,30 @@ function ui.statusBar(s)
 end
 
 -- A shadowed app tile (9x3) with a centered glyph and a label below.
-function ui.iconTile(x, y, glyph, color, label, selected)
+-- labelBg lets the label blend into a non-black desktop wallpaper.
+function ui.iconTile(x, y, glyph, color, label, selected, labelBg)
   ui.shadow(x, y, 9, 3)
   ui.fill(x, y, 9, 3, color)
   if selected then ui.fill(x, y, 9, 1, ui.theme.accent) end
   ui.text(x + 4, y + 1, glyph, ui.theme.bg, color)
-  ui.text(x, y + 4, label, ui.theme.fg, ui.theme.bg)
+  ui.text(x, y + 4, label, ui.theme.fg, labelBg or ui.theme.bg)
+end
+
+-- Desktop wallpapers (desktop-only; apps keep their own background).
+local WALLS = { negro = colors.black, azul = colors.blue, morado = colors.purple, stars = colors.black }
+ui.wallpapers = { "negro", "azul", "morado", "stars" }
+
+function ui.wallpaper(kind)
+  local bg = WALLS[kind] or colors.black
+  ui.clear(bg)
+  if kind == "stars" then
+    local w, h = term.getSize()
+    local pts = { {3,4},{11,6},{19,3},{27,8},{35,5},{43,7},{9,11},{22,13},{31,15},{46,12},{5,17},{15,9} }
+    for _, p in ipairs(pts) do
+      if p[1] <= w and p[2] <= h then ui.text(p[1], p[2], ".", colors.lightGray, bg) end
+    end
+  end
+  return bg
 end
 
 -- Brief boot splash: tiny penguin + wordmark + version.

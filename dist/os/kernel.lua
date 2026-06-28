@@ -74,7 +74,7 @@ local function drawClock()
 end
 
 local function drawDesktop(apps)
-  ui.clear()
+  local wbg = ui.wallpaper(config.get("system", "wallpaper", "negro"))
   local w = term.getSize()
   ui.fill(1, 1, w, 1, ui.theme.bar)
   ui.fill(1, 1, 1, 1, ui.theme.accent)
@@ -86,7 +86,7 @@ local function drawDesktop(apps)
     local cx = 2 + (n % cols) * 12
     local cy = 3 + math.floor(n / cols) * 6
     ui.iconTile(cx, cy, app.icon or "?", app.color or ui.theme.accent,
-                text.truncate(app.name, 11))
+                text.truncate(app.name, 11), false, wbg)
     regions[#regions + 1] = { r = { x = cx, y = cy, w = 9, h = 3 }, app = app }
   end
   ui.statusBar("clic en un icono para abrir")
