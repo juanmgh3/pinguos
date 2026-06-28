@@ -6,6 +6,7 @@ ui.theme = {
   bg = colors.black, fg = colors.white,
   bar = colors.gray, barFg = colors.white,
   accent = colors.cyan, error = colors.red,
+  shadow = colors.gray, panel = colors.gray,
 }
 
 local function safe(c) -- degrade gracefully on non-advanced computers
@@ -54,7 +55,8 @@ end
 function ui.titleBar(title)
   local w = term.getSize()
   ui.fill(1, 1, w, 1, ui.theme.bar)
-  ui.text(2, 1, title, ui.theme.barFg, ui.theme.bar)
+  ui.fill(1, 1, 1, 1, ui.theme.accent) -- left accent block
+  ui.text(3, 1, title, ui.theme.barFg, ui.theme.bar)
   local close = " x "
   ui.text(w - #close + 1, 1, close, ui.theme.barFg, ui.theme.error)
   return { x = w - #close + 1, y = 1, w = #close, h = 1 }
@@ -62,6 +64,54 @@ end
 
 function ui.wrap(s, width)
   return text.wrap(s, width or (select(1, term.getSize())))
+end
+
+-- A subtle drop shadow (gray cells) offset to the bottom-right of a region.
+function ui.shadow(x, y, w, h)
+  term.setBackgroundColor(safe(ui.theme.shadow))
+  for i = 1, h do term.setCursorPos(x + w, y + i); term.write(" ") end
+  term.setCursorPos(x + 1, y + h); term.write(string.rep(" ", w))
+end
+
+-- A framed two-tone panel with optional accent title strip + shadow.
+function ui.panel(x, y, w, h, title)
+  ui.shadow(x, y, w, h)
+  ui.fill(x, y, w, h, ui.theme.panel)               -- frame
+  ui.fill(x + 1, y + 1, w - 2, h - 2, ui.theme.bg)  -- interior
+  if title then
+    ui.fill(x, y, w, 1, ui.theme.accent)
+    ui.text(x + 1, y, title, ui.theme.bg, ui.theme.accent)
+  end
+end
+
+-- Bottom status bar with a left accent block and hint text.
+function ui.statusBar(s)
+  local w, h = term.getSize()
+  ui.fill(1, h, w, 1, ui.theme.bar)
+  ui.fill(1, h, 1, 1, ui.theme.accent)
+  ui.text(3, h, s, ui.theme.barFg, ui.theme.bar)
+end
+
+-- A shadowed app tile (9x3) with a centered glyph and a label below.
+function ui.iconTile(x, y, glyph, color, label, selected)
+  ui.shadow(x, y, 9, 3)
+  ui.fill(x, y, 9, 3, color)
+  if selected then ui.fill(x, y, 9, 1, ui.theme.accent) end
+  ui.text(x + 4, y + 1, glyph, ui.theme.bg, color)
+  ui.text(x, y + 4, label, ui.theme.fg, ui.theme.bg)
+end
+
+-- Brief boot splash: tiny penguin + wordmark + version.
+function ui.splash(version)
+  ui.clear(ui.theme.bg)
+  local w, h = term.getSize()
+  local cy = math.floor(h / 2)
+  ui.center(cy - 2, "(o<", colors.white)
+  ui.center(cy - 1, "/) )", colors.white)
+  ui.center(cy, "PinguOS", ui.theme.accent)
+  ui.fill(math.floor(w / 2) - 3, cy + 1, 8, 1, ui.theme.accent)
+  ui.center(cy + 2, "v" .. tostring(version), ui.theme.barFg)
+  sleep(1.0)
 end
 
 return ui
