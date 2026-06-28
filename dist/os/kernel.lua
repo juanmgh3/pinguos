@@ -6,6 +6,7 @@ local config = require("config")
 local appreg = require("appreg")
 local text = require("text")
 local geo = require("geo")
+local sound = require("sound")
 
 local kernel = { version = "0.1.0", pending = nil }
 local APP_DIR = "/os/apps"
@@ -35,7 +36,7 @@ end
 local function makeCtx(app)
   local w, h = term.getSize()
   return {
-    ui = ui, term = term, width = w, height = h, geo = geo,
+    ui = ui, term = term, width = w, height = h, geo = geo, sound = sound,
     log = function(msg) log.app(app.id, msg) end,
     config = {
       get = function(k, d) return config.get(app.id, k, d) end,
@@ -51,6 +52,7 @@ local function makeCtx(app)
 end
 
 local function runApp(app)
+  sound.click()
   ui.clear()
   local ok, err = pcall(app.run, makeCtx(app))
   if not ok then
@@ -98,6 +100,7 @@ function kernel.run()
   local accent = config.get("system", "accent")
   if accent then ui.setTheme({ accent = accent }) end
   ui.splash(kernel.version)
+  sound.chime()
   log.system("PinguOS " .. kernel.version .. " booting")
   local apps = discover()
   while true do
