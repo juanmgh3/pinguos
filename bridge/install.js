@@ -22,7 +22,9 @@ sleep(1)
 os.reboot()
 `;
 }
+
 // One-command GPS host setup: wget run http://127.0.0.1:8080/gpshost
+// Auto-detects position on a command computer; asks manually otherwise.
 function gpsHostScript() {
   return `-- PinguOS GPS host setup (auto-generated)
 local function hasModem()
@@ -34,19 +36,27 @@ end
 term.clear(); term.setCursorPos(1, 1)
 print("== PinguOS GPS host ==")
 if not hasModem() then
-  print("No modem. Attach a wireless/ender modem to a side, then re-run.")
+  print("No modem. Attach a wireless/ender modem, then re-run.")
   return
 end
-print("This computer's coords (press F3, look at the block):")
-io.write("X: "); local x = tonumber(read())
-io.write("Y: "); local y = tonumber(read())
-io.write("Z: "); local z = tonumber(read())
-if not (x and y and z) then print("Invalid numbers, aborted."); return end
+local x, y, z
+if commands and commands.getBlockPosition then
+  x, y, z = commands.getBlockPosition()
+  print("Command computer: auto-detected "..x..","..y..","..z)
+else
+  print("This computer's coords (F3 -> look at the block):")
+  io.write("X: "); x = tonumber(read())
+  io.write("Y: "); y = tonumber(read())
+  io.write("Z: "); z = tonumber(read())
+end
+if not (x and y and z) then print("Invalid coords, aborted."); return end
 local f = fs.open("startup.lua", "w")
+f.write("term.clear(); term.setCursorPos(1,1)\\n")
+f.write(("print('PinguOS GPS beacon')\\nprint('Pos %d %d %d - leave running')\\nprint('')\\n"):format(x, y, z))
 f.write(("shell.run('gps','host',%d,%d,%d)\\n"):format(x, y, z))
 f.close()
-print(("Saved. Hosting at %d %d %d on reboot."):format(x, y, z))
-print("Rebooting..."); sleep(1); os.reboot()
+print(("Beacon set at %d %d %d. Rebooting..."):format(x, y, z))
+sleep(1); os.reboot()
 `;
 }
 
