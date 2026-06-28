@@ -24,10 +24,14 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const { toTerminalAscii } = require("./bridge/ascii");
+const { buildManifest } = require("./bridge/manifest");
+const { installScript } = require("./bridge/install");
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const WORKDIR = process.env.CLAUDE_WORKDIR || process.cwd();
 const LUA_PATH = path.join(__dirname, "claude.lua");
+const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, "dist");
+const OS_VERSION = process.env.OS_VERSION || "dev";
 
 // Keep replies renderable on the tiny CC terminal. Appended to Claude's normal
 // system prompt (so it still has your Claude Code context), not a replacement.
@@ -76,6 +80,32 @@ function runClaude(prompt) {
 }
 
 const server = http.createServer((req, res) => {
+  // --- OS install/update static routes ---
+  if (req.method === "GET" && req.url === "/manifest") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(buildManifest(DIST_DIR, OS_VERSION)));
+    return;
+  }
+  if (req.method === "GET" && req.url === "/install") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end(installScript(`http://127.0.0.1:${PORT}`));
+    return;
+  }
+  if (req.method === "GET" && req.url.startsWith("/fs/")) {
+    const rel = decodeURIComponent(req.url.slice("/fs/".length));
+    const abs = path.resolve(DIST_DIR, rel);
+    if (abs !== DIST_DIR && !abs.startsWith(DIST_DIR + path.sep)) {
+      res.writeHead(404).end("nope");
+      return;
+    }
+    fs.readFile(abs, (e, data) => {
+      if (e) { res.writeHead(404).end("not found"); return; }
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(data);
+    });
+    return;
+  }
+
   // --- serve the Lua client for in-game wget ---
   if (req.method === "GET" && req.url.startsWith("/claude.lua")) {
     fs.readFile(LUA_PATH, "utf8", (e, data) => {
@@ -137,12 +167,16 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`claude-bridge listening on http://127.0.0.1:${PORT}`);
-  console.log(`workdir: ${WORKDIR}`);
-  console.log(
-    fs.existsSync(LUA_PATH)
-      ? "claude.lua found -> in-game `wget http://127.0.0.1:8080/claude.lua claude` will work"
-      : "WARNING: claude.lua NOT in this folder. Put it next to this file for wget to work."
-  );
-});
+function start() {
+  return new Promise((resolve) => {
+    server.listen(PORT, "127.0.0.1", () => {
+      console.log(`claude-bridge listening on http://127.0.0.1:${PORT}`);
+      console.log(`workdir: ${WORKDIR}  |  dist: ${DIST_DIR}  |  os: ${OS_VERSION}`);
+      console.log("install in-game: wget run http://127.0.0.1:" + PORT + "/install");
+      resolve(server);
+    });
+  });
+}
+
+if (require.main === module) start();
+module.exports = { server, start };
