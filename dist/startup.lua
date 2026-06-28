@@ -1,5 +1,9 @@
 -- dist/startup.lua
 package.path = "/os/?.lua;" .. package.path
+-- The shell API is program-local (not a global). Apps are loaded via loadfile,
+-- which only sees _G, so stash shell/multishell there for apps that need them.
+if shell then _G.shell = shell end
+if multishell then _G.multishell = multishell end
 local ok, err = pcall(function()
   require("kernel").run()
 end)

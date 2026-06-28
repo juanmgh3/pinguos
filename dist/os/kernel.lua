@@ -55,9 +55,13 @@ local function runApp(app)
   if not ok then
     log.app(app.id, "CRASH: " .. tostring(err))
     ui.clear()
-    local _, h = term.getSize()
-    ui.center(math.floor(h / 2), "App '" .. app.name .. "' fallo", ui.theme.error)
-    ui.center(math.floor(h / 2) + 1, "Pulsa una tecla para volver", ui.theme.fg)
+    local w = term.getSize()
+    ui.text(2, 2, "App '" .. app.name .. "' fallo:", ui.theme.error, ui.theme.bg)
+    local y = 4
+    for _, line in ipairs(text.wrap(tostring(err), w - 2)) do
+      ui.text(2, y, line, ui.theme.fg, ui.theme.bg); y = y + 1
+    end
+    ui.text(2, y + 1, "Pulsa una tecla para volver", ui.theme.barFg, ui.theme.bg)
     os.pullEvent("key")
   end
 end
