@@ -27,5 +27,6 @@ _G.T = {
 }
 dofile("dist/tests/test_text.lua")
 dofile("dist/tests/test_appreg.lua")
+dofile("dist/tests/test_geo.lua")
 print(("PinguOS tests: %d passed, %d failed"):format(pass, fail))
 if fail > 0 then os.exit(1) end
