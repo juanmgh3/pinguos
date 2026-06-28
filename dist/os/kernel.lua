@@ -75,24 +75,44 @@ local function drawClock()
   ui.text(w - #clk, 1, clk, ui.theme.barFg, ui.theme.bar)
 end
 
-local function drawDesktop(apps)
+-- Paginated desktop: apps split into pages you swipe / arrow between.
+local function drawDesktop(apps, page)
+  local w, h = term.getSize()
+  local cols = math.max(1, math.floor(w / 12))
+  local rows = math.max(1, math.floor((h - 9) / 6) + 1)
+  local perPage = cols * rows
+  local pages = math.max(1, math.ceil(#apps / perPage))
+  if page > pages then page = pages elseif page < 1 then page = 1 end
   local wbg = ui.wallpaper(config.get("system", "wallpaper", "negro"))
-  local w = term.getSize()
   ui.fill(1, 1, w, 1, ui.theme.bar)
   ui.fill(1, 1, 1, 1, ui.theme.accent)
   ui.text(3, 1, "PinguOS", ui.theme.accent, ui.theme.bar)
   drawClock()
-  local regions, cols = {}, math.max(1, math.floor(w / 12))
-  for i, app in ipairs(apps) do
-    local n = i - 1
-    local cx = 2 + (n % cols) * 12
-    local cy = 3 + math.floor(n / cols) * 6
-    ui.iconTile(cx, cy, app.icon or "?", app.color or ui.theme.accent,
-                text.truncate(app.name, 11), false, wbg)
-    regions[#regions + 1] = { r = { x = cx, y = cy, w = 9, h = 3 }, app = app }
+  local tiles, start = {}, (page - 1) * perPage
+  for slot = 1, perPage do
+    local app = apps[start + slot]
+    if app then
+      local n = slot - 1
+      local cx = 2 + (n % cols) * 12
+      local cy = 3 + math.floor(n / cols) * 6
+      ui.iconTile(cx, cy, app.icon or "?", app.color or ui.theme.accent,
+                  text.truncate(app.name, 11), false, wbg)
+      tiles[#tiles + 1] = { r = { x = cx, y = cy, w = 9, h = 3 }, app = app }
+    end
   end
-  ui.statusBar("clic en un icono para abrir")
-  return regions
+  local dots = {}
+  if pages > 1 then
+    local dx = math.floor((w - (pages * 2 - 1)) / 2) + 1
+    for p = 1, pages do
+      ui.fill(dx, h - 1, 1, 1, (p == page) and ui.theme.accent or colors.gray)
+      dots[#dots + 1] = { r = { x = dx, y = h - 1, w = 1, h = 1 }, page = p }
+      dx = dx + 2
+    end
+    ui.statusBar("flechas <- ->  o  arrastra para cambiar de escritorio")
+  else
+    ui.statusBar("clic en un icono para abrir")
+  end
+  return tiles, dots, pages, page
 end
 
 function kernel.run()
@@ -103,19 +123,40 @@ function kernel.run()
   sound.chime()
   log.system("PinguOS " .. kernel.version .. " booting")
   local apps = discover()
+  local page = 1
   while true do
-    local regions = drawDesktop(apps)
+    local tiles, dots, pages, cur = drawDesktop(apps, page)
+    page = cur
     local timer = os.startTimer(1)
+    local dragX = nil
     local redraw = false
     while not redraw do
       local ev = { os.pullEvent() }
-      if ev[1] == "timer" and ev[2] == timer then
+      local name = ev[1]
+      if name == "timer" and ev[2] == timer then
         drawClock(); timer = os.startTimer(1)
-      elseif ev[1] == "mouse_click" then
-        for _, item in ipairs(regions) do
-          if ui.hit(item.r, ev[3], ev[4]) then runApp(item.app); redraw = true; break end
+      elseif name == "mouse_click" then
+        local handled = false
+        for _, item in ipairs(tiles) do
+          if ui.hit(item.r, ev[3], ev[4]) then runApp(item.app); redraw = true; handled = true; break end
         end
-      elseif ev[1] == "term_resize" then
+        if not handled then
+          for _, d in ipairs(dots) do
+            if ui.hit(d.r, ev[3], ev[4]) then page = d.page; redraw = true; handled = true; break end
+          end
+        end
+        if not handled then dragX = ev[3] end
+      elseif name == "mouse_up" then
+        if dragX then
+          local dx = ev[3] - dragX
+          if dx <= -3 and page < pages then page = page + 1; redraw = true
+          elseif dx >= 3 and page > 1 then page = page - 1; redraw = true end
+          dragX = nil
+        end
+      elseif name == "key" then
+        if ev[2] == keys.right and page < pages then page = page + 1; redraw = true
+        elseif ev[2] == keys.left and page > 1 then page = page - 1; redraw = true end
+      elseif name == "term_resize" then
         redraw = true
       end
       if kernel.pending then
