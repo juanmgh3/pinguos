@@ -1,0 +1,12 @@
+-- dist/tests/test_text.lua
+local text = require("text")
+T.eq(text.wrap("hello world", 20), {"hello world"}, "wrap fits")
+T.eq(text.wrap("hello world", 5), {"hello", "world"}, "wrap splits")
+T.eq(text.wrap("aaaaaa", 3), {"aaa", "aaa"}, "wrap hard-split long word")
+T.eq(text.wrap("a\n\nb", 10), {"a", "", "b"}, "wrap preserves blank line")
+T.eq(text.wrap("the quick brown fox", 9), {"the quick", "brown fox"}, "wrap words")
+T.eq(text.wrap("", 10), {}, "wrap empty")
+T.eq(text.truncate("hello", 3), "hel", "truncate long")
+T.eq(text.truncate("hi", 5), "hi", "truncate short")
+T.eq(text.ljust("hi", 5), "hi   ", "ljust")
+T.eq(text.center("hi", 6), "  hi  ", "center")
