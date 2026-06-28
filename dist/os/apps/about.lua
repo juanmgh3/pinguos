@@ -11,6 +11,7 @@ return {
     for _, line in ipairs(ctx.ui.wrap(body, ctx.width - 2)) do
       ctx.ui.text(2, y, line, colors.white, colors.black); y = y + 1
     end
+    ctx.ui.statusBar("[x] o tecla Q para volver")
     while true do
       local ev = { os.pullEvent() }
       if ev[1] == "mouse_click" and ctx.ui.hit(close, ev[3], ev[4]) then return end

@@ -76,18 +76,19 @@ local function drawDesktop(apps)
   ui.clear()
   local w = term.getSize()
   ui.fill(1, 1, w, 1, ui.theme.bar)
-  ui.text(2, 1, "PinguOS", ui.theme.accent, ui.theme.bar)
+  ui.fill(1, 1, 1, 1, ui.theme.accent)
+  ui.text(3, 1, "PinguOS", ui.theme.accent, ui.theme.bar)
   drawClock()
   local regions, cols = {}, math.max(1, math.floor(w / 12))
   for i, app in ipairs(apps) do
     local n = i - 1
     local cx = 2 + (n % cols) * 12
-    local cy = 3 + math.floor(n / cols) * 5
-    ui.fill(cx, cy, 9, 3, app.color or ui.theme.accent)
-    ui.text(cx + 4, cy + 1, app.icon or "?", ui.theme.bg, app.color or ui.theme.accent)
-    ui.text(cx, cy + 3, text.truncate(app.name, 11), ui.theme.fg, ui.theme.bg)
+    local cy = 3 + math.floor(n / cols) * 6
+    ui.iconTile(cx, cy, app.icon or "?", app.color or ui.theme.accent,
+                text.truncate(app.name, 11))
     regions[#regions + 1] = { r = { x = cx, y = cy, w = 9, h = 3 }, app = app }
   end
+  ui.statusBar("clic en un icono para abrir")
   return regions
 end
 
@@ -95,6 +96,7 @@ function kernel.run()
   config.init()
   local accent = config.get("system", "accent")
   if accent then ui.setTheme({ accent = accent }) end
+  ui.splash(kernel.version)
   log.system("PinguOS " .. kernel.version .. " booting")
   local apps = discover()
   while true do

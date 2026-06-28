@@ -21,6 +21,7 @@ return {
       ui.text(2, 9, ctx.sys.getSetting("bridgeUrl", "http://127.0.0.1:8080"),
               colors.lightGray, colors.black)
       local editBtn = ui.button(2, 11, "Editar URL")
+      ui.statusBar("clic en un color o en Editar URL")
       local ev = { os.pullEvent() }
       if ev[1] == "mouse_click" then
         if ui.hit(close, ev[3], ev[4]) then return end
