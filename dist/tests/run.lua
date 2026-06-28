@@ -26,6 +26,6 @@ _G.T = {
   end,
 }
 dofile("dist/tests/test_text.lua")
-if fs and false then end -- (appreg test added in Task 5)
+dofile("dist/tests/test_appreg.lua")
 print(("PinguOS tests: %d passed, %d failed"):format(pass, fail))
 if fail > 0 then os.exit(1) end
