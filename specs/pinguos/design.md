@@ -266,9 +266,9 @@ v1 relies on (1) + (3). (2) is an optional accelerator.
 - **Chat Box synergy** (needs Advanced Peripherals) — talk to Claude from normal
   Minecraft chat, not just the computer terminal.
 
-## 11. Open questions
+## 11. Confirmed decisions
 
-1. Keep the name **PinguOS**, or rename?
-2. v1 desktop on the **computer terminal** only (confirmed default), monitors
-   deferred — OK?
-3. Anything in the v1 app set to add or drop before we plan?
+1. **Name:** PinguOS (confirmed).
+2. **v1 surface:** computer terminal only; monitors deferred (confirmed).
+3. **v1 app set:** Claude, Settings, Update, Terminal, About — as listed
+   (confirmed).
