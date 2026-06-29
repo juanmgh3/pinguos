@@ -56,8 +56,9 @@ a JS string; it is real Lua under `turtle/` (agent + lib + jobs), installed to `
 on the turtle via a mini-installer, and runs whole **jobs** on its own.
 
 - Role auto-detected from the equipped tool (`getEquippedLeft/Right`), prompt fallback.
-- Jobs shipped: `branch-mine`, `dig-down` (mineria); `fell-tree`, `tree-farm` (tala);
-  `crop-loop` (granja); `goto` (any). Manual D-pad kept as debug.
+- Jobs shipped: `branch-mine`, `dig-down` (mineria); `fell-tree`, `tree-farm`,
+  `lumber` (tala, area sweep); `crop-loop` (granja); `goto` (any). Manual D-pad as debug.
+- Shared perception helpers in `api`: `isLog`, `chopTree` (so tala jobs share a brain).
 - Stays responsive mid-job via `parallel` (answers status, obeys `cancel`).
 - **Still missing (later):** excavacion/transporte jobs, haul, builder/blueprint,
   job queues, pathfinding, resume-across-reboot.

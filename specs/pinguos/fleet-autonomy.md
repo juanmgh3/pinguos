@@ -106,9 +106,13 @@ Turtle → computer:
 | Role | Jobs |
 |---|---|
 | **mineria** (pickaxe) | `branch-mine N` (tunnel + side branches), `dig-down N` |
-| **tala** (axe) | `fell-tree` (chop up, climb down, replant), `tree-farm L` (patrol + fell + replant) |
+| **tala** (axe) | `fell-tree` (one tree in front), `tree-farm L` (one row), `lumber WxL` (sweep a whole patch, fell every tree found, replant, loop) |
 | **granja** (hoe) | `crop-loop WxL` (harvest only ripe, replant, deposit) |
 | **any** | `goto x y z` (GPS navigation), manual D-pad as a **debug** submenu |
+
+The tree-felling logic is shared via `api.chopTree()` / `api.isLog()` so all three
+tala jobs use one brain. A turtle can't scan an area (no Advanced Peripherals), so
+"finding" trees = sweeping the patch and reacting to what's adjacent.
 
 ## Fleet app: mission control
 

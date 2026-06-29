@@ -101,6 +101,32 @@ return function(ctx)
     return (({ forward = turtle.place, up = turtle.placeUp, down = turtle.placeDown })[dir or "forward"])()
   end
 
+  ---- perception & trees (reusable "smarts") --------------------------------
+  -- A turtle only senses the 3 blocks it touches (front/up/down) -- there is no
+  -- area scanner on this setup. "Searching" therefore means sweeping an area and
+  -- reacting to what turns up adjacent; these helpers make that cheap.
+  function api.isLog(dir)
+    local ok, d = api.inspect(dir)
+    return ok and d and type(d.name) == "string" and d.name:find("log", 1, true) ~= nil
+  end
+
+  -- Fell the tree whose trunk is directly in front: step in, climb it, come back
+  -- down, step out, replant a sapling if we carry one. Returns the trunk height
+  -- (0 if there was no log in front). Shared by fell-tree, tree-farm and lumber.
+  function api.chopTree()
+    if not api.isLog("forward") then return 0 end
+    api.dig("forward"); api.forward()
+    local h = 0
+    while api.isLog("up") do
+      if not api.digMove("up") then break end
+      h = h + 1
+    end
+    for _ = 1, h do api.down() end
+    api.back()
+    if api.selectItem("sapling") then api.place("forward") end
+    return h + 1
+  end
+
   ---- control glue (owned by the agent) -------------------------------------
   function api.shouldCancel() return ctx.shouldCancel() end
 
