@@ -37,5 +37,6 @@ _G.T = {
 
 dofile("turtle/tests/test_roles.lua")
 dofile("turtle/tests/test_nav.lua")
+dofile("turtle/tests/test_blocks.lua")
 print(("turtle tests: %d passed, %d failed"):format(pass, fail))
 if fail > 0 then os.exit(1) end

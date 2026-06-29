@@ -15,6 +15,7 @@ end
 
 local roles   = loadMod(BASE .. "/lib/roles.lua")
 local nav     = loadMod(BASE .. "/lib/nav.lua")
+local blocks  = loadMod(BASE .. "/lib/blocks.lua")
 local makeApi = loadMod(BASE .. "/lib/api.lua")
 
 -- discover jobs from /pingu/jobs
@@ -134,7 +135,7 @@ local function runJob(boss, job, params)
   local result = { ok = false, info = "" }
 
   local api = makeApi({
-    params = params, nav = nav, protocol = PROTOCOL, name = name, job = job.id, pos = pos,
+    params = params, nav = nav, blocks = blocks, protocol = PROTOCOL, name = name, job = job.id, pos = pos,
     shouldCancel = function() return cancelled end,
     setStatus = function(s) state = s end,
     setProg = function(pct, info) prog = { pct = pct or 0, info = info or "" } end,

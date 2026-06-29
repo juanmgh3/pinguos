@@ -107,7 +107,14 @@ return function(ctx)
   -- reacting to what turns up adjacent; these helpers make that cheap.
   function api.isLog(dir)
     local ok, d = api.inspect(dir)
-    return ok and d and type(d.name) == "string" and d.name:find("log", 1, true) ~= nil
+    if not (ok and d) then return false end
+    return ctx.blocks.isLog(d.name)
+  end
+
+  function api.isOre(dir)
+    local ok, d = api.inspect(dir)
+    if not (ok and d) then return false end
+    return ctx.blocks.isOre(d.name)
   end
 
   -- Fell the tree whose trunk is directly in front: step in, climb it, come back
