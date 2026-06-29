@@ -137,9 +137,16 @@ return function(ctx)
   ---- control glue (owned by the agent) -------------------------------------
   function api.shouldCancel() return ctx.shouldCancel() end
 
-  -- Report progress: update local telemetry, broadcast to any listening computer.
+  -- Report progress. Local telemetry updates every call (cheap), but the rednet
+  -- broadcast is THROTTLED to ~2/s. Jobs call this every block; several working
+  -- turtles broadcasting every step floods the fleet computer's event queue (a real
+  -- limit inside CC) and freezes a pocket. The completion (100%) always goes out.
+  local lastBroadcast = 0
   function api.progress(pct, info)
     ctx.setProg(pct, info)
+    local now = os.clock()
+    if (pct or 0) < 100 and (now - lastBroadcast) < 0.5 then return end
+    lastBroadcast = now
     rednet.broadcast({
       t = "progress", name = ctx.name, job = ctx.job,
       pct = pct, info = info, fuel = turtle.getFuelLevel(), pos = ctx.pos(),

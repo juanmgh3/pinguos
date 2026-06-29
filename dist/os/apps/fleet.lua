@@ -2,10 +2,12 @@
 -- Live dashboard + per-turtle job dispatcher (driven by each turtle's own catalog)
 -- + cancel. The old manual D-pad survives as a "debug" submenu.
 --
--- Rendering: everything draws into a `window` back-buffer that is flipped visible
--- only once per frame (setVisible), so term.clear is never seen -> no flicker. And
--- redraws are coalesced: rednet messages only update state; we repaint on a fixed
--- tick (and immediately on user input), not once per message.
+-- Rendering: everything draws into a `window` back-buffer flipped visible once per
+-- frame (setVisible) -> no flicker. EVERY loop (dashboard, jobMenu, manualMenu)
+-- coalesces redraws: rednet messages only update state; we repaint on a fixed tick
+-- (and immediately on user input), never once-per-message. Turtles also throttle
+-- their progress broadcasts. Together this keeps a pocket computer from drowning in
+-- events when several turtles work at once.
 return {
   id = "fleet", name = "Fleet", icon = "T", color = colors.brown,
   desc = "Controlar turtles",
@@ -78,7 +80,6 @@ return {
       else return colors.white end
     end
 
-    -- low fuel stands out: red at empty, orange when it won't last long
     local function fuelColor(fuel)
       if fuel == "unlimited" then return colors.lightGray end
       local n = tonumber(fuel)
@@ -101,7 +102,8 @@ return {
       return { x = x, y = y, w = #s, h = 1 }
     end
 
-    ---- small input helpers --------------------------------------------------
+    ---- single-param prompt (uses read(), which eats outer timers -> callers
+    ---- restart theirs afterwards) -------------------------------------------
     local function promptParams(job)
       local params = {}
       for _, p in ipairs(job.params or {}) do
@@ -120,42 +122,50 @@ return {
     end
 
     ---- manual D-pad (debug) -------------------------------------------------
+    local LAYOUT = {
+      { "Adelante", "forward" }, { "Atras", "back" },
+      { "Sube", "up" }, { "Baja", "down" },
+      { "Izq", "left" }, { "Der", "right" },
+      { "Cava", "dig" }, { "CavaAb", "digDown" },
+      { "Ataca", "attack" },
+    }
     local function manualMenu(id)
+      local tick = os.startTimer(0.4)
       local result = ""
-      while true do
-        local close
-        local btns = {}
+      local close, btns
+      local function redraw()
         frame(function()
+          btns = {}
           ui.clear()
           close = ui.titleBar("Manual #" .. id)
           ui.text(2, 2, "modo debug - una orden", colors.lightGray, colors.black)
-          local layout = {
-            { "Adelante", "forward" }, { "Atras", "back" },
-            { "Sube", "up" }, { "Baja", "down" },
-            { "Izq", "left" }, { "Der", "right" },
-            { "Cava", "dig" }, { "CavaAb", "digDown" },
-            { "Ataca", "attack" },
-          }
-          for i, a in ipairs(layout) do
+          for i, a in ipairs(LAYOUT) do
             local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
             btns[i] = { r = ui.button(2 + col * 13, 4 + row * 2, a[1]), action = a[2] }
           end
           if result ~= "" then ui.text(2, h - 1, result:sub(1, w - 2), ui.theme.accent, colors.black) end
           ui.statusBar("clic orden  -  [x] volver")
         end)
+      end
+      redraw()
+      while true do
         local ev = { os.pullEvent() }
-        if ev[1] == "rednet_message" and ev[4] == fleet.PROTOCOL then
+        local e = ev[1]
+        if e == "timer" and ev[2] == tick then
+          redraw(); tick = os.startTimer(0.4)
+        elseif e == "rednet_message" and ev[4] == fleet.PROTOCOL then
           ingest(ev[2], ev[3])
           if fleet.is(ev[3], "done") then
             result = (ev[3].ok and "OK " or "fallo ") .. tostring(ev[3].action or "")
           end
-        elseif ev[1] == "mouse_click" then
+        elseif e == "mouse_click" then
           if ui.hit(close, ev[3], ev[4]) then return end
           for _, b in ipairs(btns) do
             if ui.hit(b.r, ev[3], ev[4]) then
               rednet.send(id, fleet.cmd(b.action), fleet.PROTOCOL)
               result = "enviado: " .. b.action
               if ctx.sound then ctx.sound.click() end
+              redraw()
             end
           end
         end
@@ -164,12 +174,13 @@ return {
 
     ---- per-turtle command center -------------------------------------------
     local function jobMenu(id)
-      local timer = os.startTimer(2)
-      while true do
-        local t = turtles[id] or {}
-        local close, cancelBtn, manualBtn
-        local buttons = {}
+      local disc = os.startTimer(2)
+      local tick = os.startTimer(0.4)
+      local close, cancelBtn, manualBtn, buttons
+      local function redraw()
         frame(function()
+          local t = turtles[id] or {}
+          close, cancelBtn, manualBtn, buttons = nil, nil, nil, {}
           ui.clear()
           close = ui.titleBar(("Turtle #%d %s"):format(id, t.name or ""))
           ui.text(2, 3, "rol: " .. (t.role or "?"), colors.lightGray, colors.black)
@@ -181,7 +192,6 @@ return {
           if t.pos then
             ui.text(2, 6, ("pos:%d,%d,%d"):format(t.pos.x, t.pos.y, t.pos.z), colors.lightGray, colors.black)
           end
-
           local y = 8
           if t.status == "working" then
             if t.prog then
@@ -207,29 +217,38 @@ return {
           if t.result then ui.text(2, h - 1, t.result:sub(1, w - 2), ui.theme.accent, colors.black) end
           ui.statusBar("clic  -  [x] volver a la lista")
         end)
-
+      end
+      redraw()
+      while true do
         local ev = { os.pullEvent() }
-        if ev[1] == "timer" and ev[2] == timer then
-          rednet.broadcast(fleet.discover(), fleet.PROTOCOL); timer = os.startTimer(2)
-        elseif ev[1] == "rednet_message" and ev[4] == fleet.PROTOCOL then
+        local e = ev[1]
+        if e == "timer" and ev[2] == disc then
+          rednet.broadcast(fleet.discover(), fleet.PROTOCOL); disc = os.startTimer(2)
+        elseif e == "timer" and ev[2] == tick then
+          redraw(); tick = os.startTimer(0.4)
+        elseif e == "rednet_message" and ev[4] == fleet.PROTOCOL then
           ingest(ev[2], ev[3])
-        elseif ev[1] == "mouse_click" then
+        elseif e == "mouse_click" then
           local mx, my = ev[3], ev[4]
           if ui.hit(close, mx, my) then return end
           if cancelBtn and ui.hit(cancelBtn, mx, my) then
             rednet.send(id, fleet.cancel(), fleet.PROTOCOL)
-            turtles[id].result = "cancelando..."
+            if turtles[id] then turtles[id].result = "cancelando..." end
             if ctx.sound then ctx.sound.click() end
+            redraw()
           elseif ui.hit(manualBtn, mx, my) then
             manualMenu(id)
+            disc, tick = os.startTimer(2), os.startTimer(0.4)   -- submenu consumed ours
+            redraw()
           else
             for _, b in ipairs(buttons) do
               if ui.hit(b.r, mx, my) then
                 local params = promptParams(b.job)
                 rednet.send(id, fleet.job(b.job.id, params), fleet.PROTOCOL)
-                turtles[id] = turtles[id] or {}
-                turtles[id].result = "enviado: " .. b.job.id
+                if turtles[id] then turtles[id].result = "enviado: " .. b.job.id end
                 if ctx.sound then ctx.sound.click() end
+                disc, tick = os.startTimer(2), os.startTimer(0.4) -- read() consumed ours
+                redraw()
                 break
               end
             end
@@ -239,9 +258,6 @@ return {
     end
 
     ---- dashboard (scrollable) -----------------------------------------------
-    -- Immediate-mode scroll: `scroll` is just the index of the first visible
-    -- turtle. We draw the window list[scroll+1 .. scroll+visible] + a proportional
-    -- scrollbar; events only nudge `scroll`, which the main loop clamps.
     local function drawDashboard()
       ui.clear()
       local list = ids()
@@ -278,8 +294,8 @@ return {
         else
           ui.text(2, y + 1, (t.status or "?"), statusColor(t.status), colors.black)
           local sx = 2 + #(t.status or "?") + 1
-          local fs = tostring(t.fuel or "?")
-          ui.text(sx, y + 1, ("f:%s inv:%s%%"):format(fs, t.inv or 0):sub(1, cw - sx), colors.lightGray, colors.black)
+          ui.text(sx, y + 1, ("f:%s inv:%s%%"):format(tostring(t.fuel or "?"), t.inv or 0):sub(1, cw - sx),
+            colors.lightGray, colors.black)
         end
         rows[#rows + 1] = { y1 = y, y2 = y + 1, id = id }
       end
@@ -330,10 +346,12 @@ return {
             else scroll = scroll + visible end
             clamp(); redraw()
           else
+            local opened = false
             for _, r in ipairs(rows) do
-              if my >= r.y1 and my <= r.y2 then jobMenu(r.id); break end
+              if my >= r.y1 and my <= r.y2 then jobMenu(r.id); opened = true; break end
             end
-            redraw()                                 -- repaint after a submenu returns
+            if opened then disc, tick = os.startTimer(2), os.startTimer(0.4) end -- submenu ate ours
+            redraw()
           end
         elseif e == "key" then
           local k = ev[2]
