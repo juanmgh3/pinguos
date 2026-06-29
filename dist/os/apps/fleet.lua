@@ -23,6 +23,8 @@ return {
 
     ---- fleet state ----------------------------------------------------------
     local turtles = {}
+    local scroll = 0      -- index of the first turtle shown (dashboard scroll)
+    local LIST_TOP = 2    -- first list row, just under the title bar
     local function ids()
       local list = {}
       for id in pairs(turtles) do list[#list + 1] = id end
@@ -202,57 +204,100 @@ return {
       end
     end
 
-    ---- dashboard ------------------------------------------------------------
+    ---- dashboard (scrollable) -----------------------------------------------
+    -- Immediate-mode scroll: `scroll` is just the index of the first visible
+    -- turtle. We draw the window list[scroll+1 .. scroll+visible] + a proportional
+    -- scrollbar; events only nudge `scroll`, which the main loop clamps.
     local function drawDashboard()
       ui.clear()
       local list = ids()
-      local close = ui.titleBar("Fleet (" .. #list .. ")")
+      local close = ui.titleBar(("Fleet (%d)"):format(#list))
       local rows = {}
+      local listBot = h - 1
+      local visible = math.max(1, math.floor((listBot - LIST_TOP + 1) / 2)) -- 2 lines/turtle
+
       if #list == 0 then
         ui.text(2, 3, "Buscando turtles...", colors.lightGray, colors.black)
         ui.text(2, 5, "Enciende cada turtle con:", colors.white, colors.black)
         ui.text(2, 6, "wget run .../turtle", colors.lightGray, colors.black)
-      else
-        local y = 3
-        for _, id in ipairs(list) do
-          if y > h - 2 then break end
-          local t = turtles[id]
-          local col = statusColor(t.status)
-          ui.text(2, y, ("#%d %s [%s]"):format(id, t.name or "?", t.role or "?"):sub(1, w - 2),
-            col, colors.black)
-          if t.status == "working" and t.prog then
-            local bw = math.min(w - 10, 14)
-            drawBar(2, y + 1, bw, t.prog.pct, colors.cyan)
-            ui.text(2 + bw + 1, y + 1, (t.prog.pct or 0) .. "%", colors.cyan, colors.black)
-          else
-            ui.text(2, y + 1, ("%s  f:%s inv:%s%%"):format(
-              t.status or "?", tostring(t.fuel or "?"), tostring(t.inv or 0)), colors.lightGray, colors.black)
-          end
-          rows[#rows + 1] = { y1 = y, y2 = y + 1, id = id }
-          y = y + 3
-        end
+        ui.statusBar("R rescan  -  [x] sale")
+        return close, rows, visible, 0
       end
-      ui.statusBar("clic turtle  -  R rescan  -  [x] sale")
-      return close, rows
+
+      if scroll > math.max(0, #list - visible) then scroll = math.max(0, #list - visible) end
+      if scroll < 0 then scroll = 0 end
+
+      local hasBar = #list > visible
+      local cw = hasBar and (w - 1) or w   -- reserve the last column for the scrollbar
+
+      for vi = 0, visible - 1 do
+        local id = list[scroll + vi + 1]
+        if not id then break end
+        local t = turtles[id]
+        local y = LIST_TOP + vi * 2
+        ui.text(2, y, ("#%d %s [%s]"):format(id, t.name or "?", t.role or "?"):sub(1, cw - 1),
+          statusColor(t.status), colors.black)
+        if t.status == "working" and t.prog then
+          local bw = math.min(cw - 9, 12)
+          drawBar(2, y + 1, bw, t.prog.pct, colors.cyan)
+          ui.text(2 + bw + 1, y + 1, (t.prog.pct or 0) .. "%", colors.cyan, colors.black)
+        else
+          ui.text(2, y + 1, ("%s f:%s inv:%s%%"):format(
+            t.status or "?", tostring(t.fuel or "?"), tostring(t.inv or 0)):sub(1, cw - 1),
+            colors.lightGray, colors.black)
+        end
+        rows[#rows + 1] = { y1 = y, y2 = y + 1, id = id }
+      end
+
+      if hasBar then  -- proportional scrollbar on the last column
+        local trackH = listBot - LIST_TOP + 1
+        ui.fill(w, LIST_TOP, 1, trackH, colors.gray)
+        local thumbH = math.max(1, math.floor(trackH * visible / #list))
+        local thumbY = LIST_TOP + math.floor(trackH * scroll / #list)
+        if thumbY + thumbH - 1 > listBot then thumbY = listBot - thumbH + 1 end
+        ui.fill(w, thumbY, 1, thumbH, ui.theme.accent)
+      end
+
+      ui.statusBar(hasBar
+        and ("%d-%d/%d  rueda/flechas/barra  [x]"):format(
+          scroll + 1, math.min(scroll + visible, #list), #list)
+        or "clic turtle  -  R rescan  -  [x] sale")
+      return close, rows, visible, #list
     end
 
     ---- main loop ------------------------------------------------------------
     rednet.broadcast(fleet.discover(), fleet.PROTOCOL)
     local timer = os.startTimer(2)
     while true do
-      local close, rows = drawDashboard()
+      local close, rows, visible, total = drawDashboard()
+      local function clamp() scroll = math.max(0, math.min(scroll, math.max(0, total - visible))) end
       local ev = { os.pullEvent() }
       if ev[1] == "timer" and ev[2] == timer then
         rednet.broadcast(fleet.discover(), fleet.PROTOCOL); timer = os.startTimer(2)
       elseif ev[1] == "rednet_message" and ev[4] == fleet.PROTOCOL then
         ingest(ev[2], ev[3])
+      elseif ev[1] == "mouse_scroll" then
+        scroll = scroll + ev[2]; clamp()                      -- ev[2] = -1 up / 1 down
       elseif ev[1] == "mouse_click" then
-        if ui.hit(close, ev[3], ev[4]) then rednet.close(modemSide); return end
-        for _, r in ipairs(rows) do
-          if ev[4] >= r.y1 and ev[4] <= r.y2 then jobMenu(r.id); break end
+        local mx, my = ev[3], ev[4]
+        if ui.hit(close, mx, my) then rednet.close(modemSide); return end
+        if total > visible and mx >= w then                  -- tap the scrollbar to page
+          if my < math.floor((LIST_TOP + h - 1) / 2) then scroll = scroll - visible
+          else scroll = scroll + visible end
+          clamp()
+        else
+          for _, r in ipairs(rows) do
+            if my >= r.y1 and my <= r.y2 then jobMenu(r.id); break end
+          end
         end
-      elseif ev[1] == "key" and ev[2] == keys.r then
-        rednet.broadcast(fleet.discover(), fleet.PROTOCOL)
+      elseif ev[1] == "key" then
+        local k = ev[2]
+        if k == keys.r then rednet.broadcast(fleet.discover(), fleet.PROTOCOL)
+        elseif k == keys.up then scroll = scroll - 1; clamp()
+        elseif k == keys.down then scroll = scroll + 1; clamp()
+        elseif k == keys.pageUp then scroll = scroll - visible; clamp()
+        elseif k == keys.pageDown then scroll = scroll + visible; clamp()
+        end
       end
     end
   end,
