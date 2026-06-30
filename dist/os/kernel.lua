@@ -8,8 +8,10 @@ local text = require("text")
 local geo = require("geo")
 local sound = require("sound")
 local fleet = require("fleet")
+local gpu = require("gpu")
+local hdterm = require("hdterm")
 
-local kernel = { version = "0.1.0", pending = nil }
+local kernel = { version = "0.1.0", pending = nil, hd = nil }
 local APP_DIR = "/os/apps"
 
 local function loadApp(path)
@@ -38,6 +40,7 @@ local function makeCtx(app)
   local w, h = term.getSize()
   return {
     ui = ui, term = term, width = w, height = h, geo = geo, sound = sound, fleet = fleet,
+    gpu = kernel.hd and gpu or nil,   -- HD pixel layer for HD-native apps (nil on terminal)
     log = function(msg) log.app(app.id, msg) end,
     config = {
       get = function(k, d) return config.get(app.id, k, d) end,
@@ -116,14 +119,8 @@ local function drawDesktop(apps, page)
   return tiles, dots, pages, page
 end
 
-function kernel.run()
-  config.init()
-  local accent = config.get("system", "accent")
-  if accent then ui.setTheme({ accent = accent }) end
-  ui.splash(kernel.version)
-  sound.chime()
-  log.system("PinguOS " .. kernel.version .. " booting")
-  local apps = discover()
+-- The desktop event loop (run directly in terminal mode, or under parallel in HD).
+local function desktopLoop(apps)
   local page = 1
   while true do
     local tiles, dots, pages, cur = drawDesktop(apps, page)
@@ -167,6 +164,43 @@ function kernel.run()
         kernel.pending = nil; redraw = true
       end
     end
+  end
+end
+
+-- HD daemon: coalesced flush (~20fps, avoids issue #8 lag) + translate the
+-- monitor's pixel touch into a cell-space mouse_click the desktop/apps understand.
+local function hdDaemon()
+  local t = os.startTimer(0.05)
+  while true do
+    local ev = { os.pullEvent() }
+    if ev[1] == "timer" and ev[2] == t then
+      kernel.hd.flush(); t = os.startTimer(0.05)
+    elseif ev[1] == "tm_monitor_touch" then
+      local cx, cy = kernel.hd.mapPixel(ev[3], ev[4])
+      os.queueEvent("mouse_click", 1, cx, cy)
+    end
+  end
+end
+
+function kernel.run()
+  config.init()
+  local accent = config.get("system", "accent")
+  if accent then ui.setTheme({ accent = accent }) end
+  -- HD edition: if a Tom's GPU is wired, redirect the whole OS onto the wall.
+  if gpu.attach() then
+    kernel.hd = hdterm.new(gpu, { scale = config.get("system", "hdScale", 2) })
+    term.redirect(kernel.hd.term)
+  end
+  local function main()
+    ui.splash(kernel.version)
+    sound.chime()
+    log.system("PinguOS " .. kernel.version .. (kernel.hd and " (HD)" or "") .. " booting")
+    desktopLoop(discover())
+  end
+  if kernel.hd then
+    parallel.waitForAny(main, hdDaemon)
+  else
+    main()
   end
 end
 
