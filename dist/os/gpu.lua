@@ -61,9 +61,17 @@ local W, H   -- pixel dimensions of the connected screen grid
 function gpu.attach()
   dev = peripheral.find("tm_gpu")
   if not dev then return false end
-  dev.refreshSize()                 -- detect the monitor grid (call before draw)
-  pcall(dev.setSize, 64)            -- max per-block resolution, if the server allows
-  W, H = dev.getSize()              -- getSize -> wpx, hpx, blocksX, blocksY, mult
+  -- refreshSize() scans the monitor wall on a LATER server tick (it is async), so
+  -- getSize() reads a stale 0x0 if polled in the same tick. Wait for it to resolve.
+  dev.refreshSize()
+  for _ = 1, 20 do
+    W, H = dev.getSize()            -- getSize -> wpx, hpx, blocksX, blocksY, mult
+    if W and W > 0 and H and H > 0 then break end
+    os.sleep(0.1)
+  end
+  if not (W and W > 0) then W, H = 0, 0; return false end  -- no wall connected
+  pcall(dev.setSize, 64)            -- max per-block resolution now that it is wired
+  W, H = dev.getSize()              -- re-read after the resize
   return true
 end
 
