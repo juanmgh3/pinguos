@@ -188,7 +188,7 @@ function kernel.run()
   if accent then ui.setTheme({ accent = accent }) end
   -- HD edition: if a Tom's GPU is wired, redirect the whole OS onto the wall.
   if gpu.attach() then
-    kernel.hd = hdterm.new(gpu, { scale = config.get("system", "hdScale", 2) })
+    kernel.hd = hdterm.new(gpu, { scale = config.get("system", "hdScale", 1) })
     term.redirect(kernel.hd.term)
   end
   local function main()
