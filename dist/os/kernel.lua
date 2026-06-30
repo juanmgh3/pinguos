@@ -10,6 +10,7 @@ local sound = require("sound")
 local fleet = require("fleet")
 local gpu = require("gpu")
 local hdterm = require("hdterm")
+local focus = require("focus")
 
 local kernel = { version = "0.1.0", pending = nil, hd = nil }
 local APP_DIR = "/os/apps"
@@ -80,7 +81,7 @@ local function drawClock()
 end
 
 -- Paginated desktop: apps split into pages you swipe / arrow between.
-local function drawDesktop(apps, page)
+local function drawDesktop(apps, page, focusIdx)
   local w, h = term.getSize()
   local cols = math.max(1, math.floor(w / 12))
   local rows = math.max(1, math.floor((h - 9) / 6) + 1)
@@ -100,7 +101,7 @@ local function drawDesktop(apps, page)
       local cx = 2 + (n % cols) * 12
       local cy = 3 + math.floor(n / cols) * 6
       ui.iconTile(cx, cy, app.icon or "?", app.color or ui.theme.accent,
-                  text.truncate(app.name, 11), false, wbg)
+                  text.truncate(app.name, 11), (#tiles + 1 == focusIdx), wbg)
       tiles[#tiles + 1] = { r = { x = cx, y = cy, w = 9, h = 3 }, app = app }
     end
   end
@@ -121,10 +122,12 @@ end
 
 -- The desktop event loop (run directly in terminal mode, or under parallel in HD).
 local function desktopLoop(apps)
-  local page = 1
+  local page, focusIdx = 1, 1
   while true do
-    local tiles, dots, pages, cur = drawDesktop(apps, page)
+    local tiles, dots, pages, cur = drawDesktop(apps, page, focusIdx)
     page = cur
+    if focusIdx > #tiles then focusIdx = #tiles end
+    if focusIdx < 1 then focusIdx = 1 end
     local timer = os.startTimer(1)
     local dragX = nil
     local redraw = false
@@ -152,8 +155,23 @@ local function desktopLoop(apps)
           dragX = nil
         end
       elseif name == "key" then
-        if ev[2] == keys.right and page < pages then page = page + 1; redraw = true
-        elseif ev[2] == keys.left and page > 1 then page = page - 1; redraw = true end
+        local k = ev[2]
+        if k == keys.enter then
+          if tiles[focusIdx] then runApp(tiles[focusIdx].app); redraw = true end
+        elseif k == keys.up or k == keys.down or k == keys.left or k == keys.right then
+          local dir = (k == keys.up and "up") or (k == keys.down and "down")
+                   or (k == keys.left and "left") or "right"
+          local rects = {}
+          for i, t in ipairs(tiles) do rects[i] = t.r end
+          local ni = focus.spatial(rects, focusIdx, dir)
+          if ni ~= focusIdx then
+            focusIdx = ni; redraw = true
+          elseif dir == "right" and page < pages then
+            page = page + 1; focusIdx = 1; redraw = true
+          elseif dir == "left" and page > 1 then
+            page = page - 1; focusIdx = 1; redraw = true
+          end
+        end
       elseif name == "term_resize" then
         redraw = true
       end
