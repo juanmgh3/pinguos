@@ -103,6 +103,8 @@ end
 function gpu.image(x, y, ref)
   if dev then dev.drawImage(x, y, ref) end
 end
+-- Pixel width of a string at a font size (for laying out the HD term grid).
+function gpu.textLen(s, size) return dev and dev.getTextLength(s, size) or 0 end
 
 -- A composed progress/fuel bar: background track + filled portion.
 function gpu.bar(x, y, w, h, pct, fg, bg)
