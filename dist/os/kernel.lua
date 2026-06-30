@@ -10,6 +10,7 @@ local sound = require("sound")
 local fleet = require("fleet")
 local gpu = require("gpu")
 local hdterm = require("hdterm")
+local focus = require("focus")
 
 local kernel = { version = "0.1.0", pending = nil, hd = nil }
 local APP_DIR = "/os/apps"
@@ -58,7 +59,10 @@ end
 local function runApp(app)
   sound.click()
   ui.clear()
+  ui._focusIndex = 1
+  kernel.inApp = true
   local ok, err = pcall(app.run, makeCtx(app))
+  kernel.inApp = false
   if not ok then
     log.app(app.id, "CRASH: " .. tostring(err))
     ui.clear()
@@ -80,7 +84,7 @@ local function drawClock()
 end
 
 -- Paginated desktop: apps split into pages you swipe / arrow between.
-local function drawDesktop(apps, page)
+local function drawDesktop(apps, page, focusIdx)
   local w, h = term.getSize()
   local cols = math.max(1, math.floor(w / 12))
   local rows = math.max(1, math.floor((h - 9) / 6) + 1)
@@ -100,7 +104,7 @@ local function drawDesktop(apps, page)
       local cx = 2 + (n % cols) * 12
       local cy = 3 + math.floor(n / cols) * 6
       ui.iconTile(cx, cy, app.icon or "?", app.color or ui.theme.accent,
-                  text.truncate(app.name, 11), false, wbg)
+                  text.truncate(app.name, 11), (#tiles + 1 == focusIdx), wbg)
       tiles[#tiles + 1] = { r = { x = cx, y = cy, w = 9, h = 3 }, app = app }
     end
   end
@@ -121,10 +125,12 @@ end
 
 -- The desktop event loop (run directly in terminal mode, or under parallel in HD).
 local function desktopLoop(apps)
-  local page = 1
+  local page, focusIdx = 1, 1
   while true do
-    local tiles, dots, pages, cur = drawDesktop(apps, page)
+    local tiles, dots, pages, cur = drawDesktop(apps, page, focusIdx)
     page = cur
+    if focusIdx > #tiles then focusIdx = #tiles end
+    if focusIdx < 1 then focusIdx = 1 end
     local timer = os.startTimer(1)
     local dragX = nil
     local redraw = false
@@ -152,8 +158,23 @@ local function desktopLoop(apps)
           dragX = nil
         end
       elseif name == "key" then
-        if ev[2] == keys.right and page < pages then page = page + 1; redraw = true
-        elseif ev[2] == keys.left and page > 1 then page = page - 1; redraw = true end
+        local k = ev[2]
+        if k == keys.enter then
+          if tiles[focusIdx] then runApp(tiles[focusIdx].app); redraw = true end
+        elseif k == keys.up or k == keys.down or k == keys.left or k == keys.right then
+          local dir = (k == keys.up and "up") or (k == keys.down and "down")
+                   or (k == keys.left and "left") or "right"
+          local rects = {}
+          for i, t in ipairs(tiles) do rects[i] = t.r end
+          local ni = focus.spatial(rects, focusIdx, dir)
+          if ni ~= focusIdx then
+            focusIdx = ni; redraw = true
+          elseif dir == "right" and page < pages then
+            page = page + 1; focusIdx = 1; redraw = true
+          elseif dir == "left" and page > 1 then
+            page = page - 1; focusIdx = 1; redraw = true
+          end
+        end
       elseif name == "term_resize" then
         redraw = true
       end
@@ -182,6 +203,50 @@ local function hdDaemon()
   end
 end
 
+-- Focus manager: sibling of hdDaemon. Only acts inside an app (kernel.inApp); the
+-- desktop drives its own focus (Phase 1). Mutates ui._focusIndex and synthesises
+-- mouse_clicks the apps resolve with their existing ui.hit -- so apps need no code.
+local function focusManager()
+  local ctrlHeld = false
+  while true do
+    local ev = { os.pullEvent() }
+    local name = ev[1]
+    if name == "key" then
+      local k = ev[2]
+      if k == keys.leftCtrl or k == keys.rightCtrl then
+        ctrlHeld = true
+      elseif kernel.inApp then
+        local foc = ui._focusables
+        if ctrlHeld and k == keys.q then
+          if ui._closeRegion then
+            local cx, cy = focus.center(ui._closeRegion)
+            os.queueEvent("mouse_click", 1, cx, cy)
+          end
+        elseif #foc > 0 then
+          if ui._focusIndex < 1 then ui._focusIndex = 1 end
+          if ui._focusIndex > #foc then ui._focusIndex = #foc end
+          if k == keys.tab then
+            ui._focusIndex = focus.cycle(#foc, ui._focusIndex, 1)
+          elseif k == keys.up or k == keys.down or k == keys.left or k == keys.right then
+            local dir = (k == keys.up and "up") or (k == keys.down and "down")
+                     or (k == keys.left and "left") or "right"
+            ui._focusIndex = focus.spatial(foc, ui._focusIndex, dir)
+          elseif k == keys.enter then
+            local r = foc[ui._focusIndex]
+            if r then
+              local cx, cy = focus.center(r)
+              os.queueEvent("mouse_click", 1, cx, cy)
+            end
+          end
+        end
+      end
+    elseif name == "key_up" then
+      local k = ev[2]
+      if k == keys.leftCtrl or k == keys.rightCtrl then ctrlHeld = false end
+    end
+  end
+end
+
 function kernel.run()
   config.init()
   local accent = config.get("system", "accent")
@@ -190,14 +255,27 @@ function kernel.run()
   if gpu.attach() then
     kernel.hd = hdterm.new(gpu, { scale = config.get("system", "hdScale", 1) })
     term.redirect(kernel.hd.term)
+    -- Physical keyboard (Tom's tm_keyboard): switch it to native CC key/char
+    -- events so the desktop and every app get real typing for free -- no app
+    -- changes. Gated on HD because its capture GUI hides the term: a keyboard
+    -- with no wall to read is typing blind. Wrapped: a peripheral must not crash
+    -- the OS if setFireNativeEvents is missing on another mod version.
+    local kb = peripheral.find("tm_keyboard")
+    if kb and pcall(function() kb.setFireNativeEvents(true) end) then
+      kernel.kb = true
+    end
   end
   local function main()
     ui.splash(kernel.version)
     sound.chime()
-    log.system("PinguOS " .. kernel.version .. (kernel.hd and " (HD)" or "") .. " booting")
+    local surface = kernel.hd and (kernel.kb and " (HD+KB)" or " (HD)") or ""
+    log.system("PinguOS " .. kernel.version .. surface .. " booting")
     desktopLoop(discover())
   end
-  if kernel.hd then
+  if kernel.hd and kernel.kb then
+    ui.focusEnabled = true   -- widgets may now show a focus highlight
+    parallel.waitForAny(focusManager, main, hdDaemon)
+  elseif kernel.hd then
     parallel.waitForAny(main, hdDaemon)
   else
     main()

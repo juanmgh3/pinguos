@@ -2,6 +2,14 @@
 local text = require("text")
 local ui = {}
 
+-- Keyboard-focus registry (Phase 2). Rebuilt each frame by ui.clear; populated by
+-- the focusable helpers below. The focus manager (kernel) reads these; nothing here
+-- depends on CC keyboard APIs, so non-HD just leaves focusEnabled = false.
+ui._focusables = {}
+ui._focusIndex = 1
+ui._closeRegion = nil
+ui.focusEnabled = false
+
 ui.theme = {
   bg = colors.black, fg = colors.white,
   bar = colors.gray, barFg = colors.white,
@@ -19,6 +27,8 @@ end
 function ui.setTheme(t) for k, v in pairs(t) do ui.theme[k] = v end end
 
 function ui.clear(bg)
+  ui._focusables = {}
+  ui._closeRegion = nil
   term.setBackgroundColor(safe(bg or ui.theme.bg))
   term.setTextColor(safe(ui.theme.fg))
   term.clear(); term.setCursorPos(1, 1)
@@ -44,8 +54,25 @@ end
 
 function ui.button(x, y, label)
   local s = " " .. label .. " "
-  ui.text(x, y, s, ui.theme.barFg, ui.theme.accent)
+  ui._focusables[#ui._focusables + 1] = { x = x, y = y, w = #s, h = 1 }
+  local fg, bg = ui.theme.barFg, ui.theme.accent
+  if ui.focusEnabled and #ui._focusables == ui._focusIndex then
+    fg, bg = ui.theme.accent, ui.theme.barFg   -- inverse = focus highlight
+  end
+  ui.text(x, y, s, fg, bg)
   return { x = x, y = y, w = #s, h = 1 }
+end
+
+-- A labelled colour swatch (e.g. the Ajustes accent picker): w cells of `color`
+-- with " label" over it. Registers as focusable; when focused, prefixes ">" and
+-- writes the label in white so the colour stays visible.
+function ui.swatch(x, y, w, label, color)
+  ui._focusables[#ui._focusables + 1] = { x = x, y = y, w = w, h = 1 }
+  local focused = ui.focusEnabled and (#ui._focusables == ui._focusIndex)
+  ui.fill(x, y, w, 1, color)
+  ui.text(x, y, (focused and ">" or " ") .. label,
+          focused and colors.white or colors.black, color)
+  return { x = x, y = y, w = w, h = 1 }
 end
 
 function ui.hit(r, mx, my)
@@ -59,6 +86,7 @@ function ui.titleBar(title)
   ui.text(3, 1, title, ui.theme.barFg, ui.theme.bar)
   local close = " x "
   ui.text(w - #close + 1, 1, close, ui.theme.barFg, ui.theme.error)
+  ui._closeRegion = { x = w - #close + 1, y = 1, w = #close, h = 1 }
   return { x = w - #close + 1, y = 1, w = #close, h = 1 }
 end
 
