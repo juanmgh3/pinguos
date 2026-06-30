@@ -10,14 +10,15 @@ local hdterm = {}
 function hdterm.cols(wpx, cw) return math.floor(wpx / cw) end
 function hdterm.rows(hpx, ch) return math.floor(hpx / ch) end
 
--- cell (1-based, CC term convention) -> pixel (0-based) top-left corner
+-- cell (1-based) -> pixel (1-based) top-left corner. tm_gpu is 1-based (pixel
+-- (W,H) is valid, (0,0) is not), same convention as CC's term.
 function hdterm.cellToPx(col, row, cw, ch)
-  return (col - 1) * cw, (row - 1) * ch
+  return 1 + (col - 1) * cw, 1 + (row - 1) * ch
 end
 
--- pixel (0-based) -> cell (1-based); maps touch events back to term space
+-- pixel (1-based) -> cell (1-based); maps touch events back to term space
 function hdterm.pxToCell(px, py, cw, ch)
-  return math.floor(px / cw) + 1, math.floor(py / ch) + 1
+  return math.floor((px - 1) / cw) + 1, math.floor((py - 1) / ch) + 1
 end
 
 return hdterm
