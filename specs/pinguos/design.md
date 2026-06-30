@@ -10,6 +10,12 @@
 > contract the implementation builds against. If it isn't written here, it
 > isn't agreed.
 
+> **Update (2026-06-30):** the "No Advanced Peripherals / terminal-only"
+> constraints in §3 and §10 describe the original **Fabric 26.2** setup. PinguOS
+> now targets a **NeoForge 1.21.1** instance where those are lifted (geo scanner,
+> HD monitors, CC:C Bridge, ClaudeCraft all available). See
+> `specs/pinguos/hd-command-center.md`, which supersedes them.
+
 ---
 
 ## 1. Summary & vision

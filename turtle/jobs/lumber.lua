@@ -1,8 +1,9 @@
 -- turtle/jobs/lumber.lua  -- autonomous AREA lumberjack: sweep a width x length
 -- patch and fell EVERY tree in (and bordering) it, replanting, in a loop.
 --
--- HONEST LIMIT: a turtle here has no area scanner (no Advanced Peripherals), so it
--- can only sense the blocks it touches. "Detecting nearby trees" therefore means
+-- HONEST LIMIT: this turtle carries no geo-scanner upgrade (one is available now on
+-- the NeoForge instance, but this job stays touch-based), so it can only sense the
+-- blocks it touches. "Detecting nearby trees" therefore means
 -- sweeping the patch and, AT EVERY CELL, turning to look in all 4 directions and
 -- felling whatever log is adjacent. That covers the whole patch plus its border --
 -- the closest thing to "see trees nearby and go chop them" the hardware allows.

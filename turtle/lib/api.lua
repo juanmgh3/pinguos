@@ -102,9 +102,10 @@ return function(ctx)
   end
 
   ---- perception & trees (reusable "smarts") --------------------------------
-  -- A turtle only senses the 3 blocks it touches (front/up/down) -- there is no
-  -- area scanner on this setup. "Searching" therefore means sweeping an area and
-  -- reacting to what turns up adjacent; these helpers make that cheap.
+  -- A turtle only senses the 3 blocks it touches (front/up/down) -- these turtles
+  -- carry no geo-scanner upgrade (now an option on the NeoForge instance; see
+  -- specs/pinguos/hd-command-center.md). "Searching" therefore means sweeping an
+  -- area and reacting to what turns up adjacent; these helpers make that cheap.
   function api.isLog(dir)
     local ok, d = api.inspect(dir)
     if not (ok and d) then return false end

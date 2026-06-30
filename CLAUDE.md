@@ -55,6 +55,12 @@ Local Lua 5.4 is at `C:\Users\juanm\AppData\Local\Programs\Lua\bin\lua.exe`
 
 ## Environment
 
-Minecraft **26.2**, **Fabric**, CC: Tweaked **1.120.0**, Advanced Computer
-(color + mouse), wireless/ender modems, creative mode. **No Advanced Peripherals**
-(it is Forge/NeoForge only) → block/ore scanning is not possible on this setup.
+Target instance: **NeoForge 1.21.1**, **CC: Tweaked 1.120.0**, Advanced Computer
+(color + mouse), wireless/ender modems, creative mode. This instance has the
+peripheral mods the old Fabric 26.2 setup lacked: **Advanced Peripherals** 0.7.62b
+(geo/ore scanner, player/environment detectors, ME bridge, chat box), **Tom's
+Peripherals** 1.3.1 (HD monitors + GPU `tm_gpu`, physical keyboard), **CC:C Bridge**
+(read/control Create machines), **ClaudeCraft** 1.2.2 (native Claude in CC). So
+block/ore scanning, HD displays, etc. ARE now possible — see
+`specs/pinguos/hd-command-center.md`. The base computer terminal is still 8-bit
+ASCII; only Tom's HD monitors break out of that.
