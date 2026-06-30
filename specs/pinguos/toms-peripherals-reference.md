@@ -118,8 +118,47 @@ gpu.drawImage(1, 1, image.ref())     -- ALWAYS pass image.ref()
 
 - **Touch:** `tm_monitor_touch` → `(side, x, y, sneaking)` in **pixels (1-based)**. Also
   `tm_monitor_mouse_click/_drag/_scroll/_move`. Map to cells with the pixel→cell formula.
-- **Keyboard `tm_keyboard`:** prefixed `tm_keyboard_key(side,keyId,held)` / `_key_up` /
-  `_char` / `_paste` by default; `setFireNativeEvents(true)` → standard CC `key`/`char`/etc.
+
+### Keyboard `tm_keyboard` (source-verified, 2026-06-30)
+
+**Three items, ONE peripheral.** The **Keyboard block**, the **Keyboard Dongle** block,
+and the **Portable Keyboard** item all back the *same* block entity (`keyboardBE`) and so
+all expose peripheral type **`tm_keyboard`** (`peripheral.find("tm_keyboard")`). The only
+difference is how keystrokes reach that box.
+
+- **Keyboard block** — solid block. Right-click → opens the capture GUI. Fixed at the PC.
+- **Keyboard Dongle** — modem-shaped block (`ModemShapes`); the wireless receiver for the
+  Portable Keyboard.
+- **Portable Keyboard** — held item, has on/off state (`inUseComponent`). **Shift+right-click
+  the Dongle to bind** (stores its `BlockPos`; range **≤64 blocks**, no line-of-sight); then
+  right-click (in hand) opens the capture GUI from anywhere in range.
+
+**Attach to the computer** like any peripheral: block touching a face of the Advanced
+Computer, or via wired modem + cable.
+
+**The capture GUI (the non-obvious UX):** in MC your keys move your player, so typing into a
+computer needs a window that hijacks input. The keyboard's screen does exactly that —
+`grabMouse()` + `KeyMapping.releaseAll()`, `isPauseScreen()=false`, empty
+`renderBackground()`. It is a **near-transparent window showing only a `keyboard.open`
+label** — NOT the computer output. You **watch the HD monitor next to it** and type; Esc
+closes and returns player control. This is the `termEmuTest.lua` flow.
+
+**Events.** Default (`fireNativeEvents=false`): prefixed, peripheral name as 1st arg —
+`tm_keyboard_key(name,keyId,held)`, `tm_keyboard_key_up`, `tm_keyboard_char`,
+`tm_keyboard_paste`. Call **`setFireNativeEvents(true)`** (the *only* exposed Lua method) →
+standard CC events: `key`, `key_up`, `char`, `paste`, `terminate`, `shutdown`, `reboot`
+(identical to a real terminal keyboard; works with `term.redirect`). Portable-only events
+fire regardless: `portable_connect(id)` / `portable_disconnect(id)` on GUI open/close.
+
+- **PinguOS plan:** detect `tm_keyboard` at boot (beside `tm_gpu`), call
+  `setFireNativeEvents(true)` once per boot (does NOT persist) → desktop + every app get the
+  physical keyboard for free; apps already `os.pullEvent("char"/"key")`, no rewrites.
+- **Gotcha:** native `terminate` = Ctrl+T from the physical keyboard kills the running app.
+  Apps run under `pcall` already, but decide whether to swallow it in HD mode.
+
+**Sources:** wiki `Keyboard`; `item/PortableKeyboardItem.java`, `block/KeyboardBlock.java`,
+`block/KeyboardDongleBlock.java`, `block/entity/KeyboardBlockEntity.java`,
+`client/KeyboardScreen.java`.
 
 ## Gotchas
 

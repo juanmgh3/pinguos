@@ -190,11 +190,21 @@ function kernel.run()
   if gpu.attach() then
     kernel.hd = hdterm.new(gpu, { scale = config.get("system", "hdScale", 1) })
     term.redirect(kernel.hd.term)
+    -- Physical keyboard (Tom's tm_keyboard): switch it to native CC key/char
+    -- events so the desktop and every app get real typing for free -- no app
+    -- changes. Gated on HD because its capture GUI hides the term: a keyboard
+    -- with no wall to read is typing blind. Wrapped: a peripheral must not crash
+    -- the OS if setFireNativeEvents is missing on another mod version.
+    local kb = peripheral.find("tm_keyboard")
+    if kb and pcall(function() kb.setFireNativeEvents(true) end) then
+      kernel.kb = true
+    end
   end
   local function main()
     ui.splash(kernel.version)
     sound.chime()
-    log.system("PinguOS " .. kernel.version .. (kernel.hd and " (HD)" or "") .. " booting")
+    local surface = kernel.hd and (kernel.kb and " (HD+KB)" or " (HD)") or ""
+    log.system("PinguOS " .. kernel.version .. surface .. " booting")
     desktopLoop(discover())
   end
   if kernel.hd then
