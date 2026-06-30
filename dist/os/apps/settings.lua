@@ -15,9 +15,7 @@ return {
       local abtns = {}
       for i = 1, #accents do
         local x = 2 + (i - 1) * 9
-        ui.fill(x, 4, 8, 1, accents[i])
-        ui.text(x, 4, " " .. anames[i], colors.black, accents[i])
-        abtns[i] = { x = x, y = 4, w = 8, h = 1 }
+        abtns[i] = ui.swatch(x, 4, 8, anames[i], accents[i])
       end
 
       ui.text(2, 6, "Fondo de pantalla:", colors.white, colors.black)
