@@ -22,3 +22,11 @@ T.eq(focus.spatial(grid, 1, "up"),    1, "no tile above 1 -> stays")
 -- guards
 T.eq(focus.spatial({}, 1, "right"),   0, "empty list -> 0")
 T.eq(focus.spatial(grid, 0, "right"), 1, "bad index -> first")
+
+-- cycle: Tab-order wrap-around
+T.eq(focus.cycle(3, 1, 1),  2, "cycle next 1 -> 2")
+T.eq(focus.cycle(3, 3, 1),  1, "cycle next wraps 3 -> 1")
+T.eq(focus.cycle(3, 1, -1), 3, "cycle prev wraps 1 -> 3")
+T.eq(focus.cycle(3, 2, -1), 1, "cycle prev 2 -> 1")
+T.eq(focus.cycle(0, 1, 1),  0, "cycle empty -> 0")
+T.eq(focus.cycle(3, 9, 1),  1, "cycle bad index -> first")

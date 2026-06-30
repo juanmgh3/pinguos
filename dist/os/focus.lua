@@ -39,4 +39,15 @@ function focus.spatial(rects, current, dir)
   return best
 end
 
+-- Wrap-around Tab order. n focusables, 1-based current, step +1 (next) / -1 (prev).
+-- n==0 -> 0; current out of [1,n] -> 1.
+function focus.cycle(n, current, step)
+  if n == 0 then return 0 end
+  if current < 1 or current > n then return 1 end
+  local i = current + step
+  if i > n then i = 1 end
+  if i < 1 then i = n end
+  return i
+end
+
 return focus
