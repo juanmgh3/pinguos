@@ -92,8 +92,13 @@ function gpu.line(x1, y1, x2, y2, color, smooth)
   if not dev then return end
   if smooth then dev.lineS(x1, y1, x2, y2, color) else dev.line(x1, y1, x2, y2, color) end
 end
+-- drawText rejects nil optional args, so only pass the ones we actually have.
 function gpu.text(x, y, s, fg, bg, size)
-  if dev then dev.drawText(x, y, s, fg, bg, size) end
+  if not dev then return end
+  fg = fg or gpu.fromCC(0x1)                              -- default white
+  if bg and size then dev.drawText(x, y, s, fg, bg, size)
+  elseif bg then      dev.drawText(x, y, s, fg, bg)
+  else                dev.drawText(x, y, s, fg) end
 end
 function gpu.image(x, y, ref)
   if dev then dev.drawImage(x, y, ref) end
