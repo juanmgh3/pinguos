@@ -1,5 +1,16 @@
+# Dependencies
 node_modules/
+
+# Logs & temp
 *.log
 /logs/
 *.tmp
+
+# Local captures (Minecraft screenshots, etc.)
+screenshots/
+
+# OS / editor noise
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
