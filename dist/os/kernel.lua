@@ -59,7 +59,10 @@ end
 local function runApp(app)
   sound.click()
   ui.clear()
+  ui._focusIndex = 1
+  kernel.inApp = true
   local ok, err = pcall(app.run, makeCtx(app))
+  kernel.inApp = false
   if not ok then
     log.app(app.id, "CRASH: " .. tostring(err))
     ui.clear()
@@ -200,6 +203,50 @@ local function hdDaemon()
   end
 end
 
+-- Focus manager: sibling of hdDaemon. Only acts inside an app (kernel.inApp); the
+-- desktop drives its own focus (Phase 1). Mutates ui._focusIndex and synthesises
+-- mouse_clicks the apps resolve with their existing ui.hit -- so apps need no code.
+local function focusManager()
+  local ctrlHeld = false
+  while true do
+    local ev = { os.pullEvent() }
+    local name = ev[1]
+    if name == "key" then
+      local k = ev[2]
+      if k == keys.leftCtrl or k == keys.rightCtrl then
+        ctrlHeld = true
+      elseif kernel.inApp then
+        local foc = ui._focusables
+        if ctrlHeld and k == keys.q then
+          if ui._closeRegion then
+            local cx, cy = focus.center(ui._closeRegion)
+            os.queueEvent("mouse_click", 1, cx, cy)
+          end
+        elseif #foc > 0 then
+          if ui._focusIndex < 1 then ui._focusIndex = 1 end
+          if ui._focusIndex > #foc then ui._focusIndex = #foc end
+          if k == keys.tab then
+            ui._focusIndex = focus.cycle(#foc, ui._focusIndex, 1)
+          elseif k == keys.up or k == keys.down or k == keys.left or k == keys.right then
+            local dir = (k == keys.up and "up") or (k == keys.down and "down")
+                     or (k == keys.left and "left") or "right"
+            ui._focusIndex = focus.spatial(foc, ui._focusIndex, dir)
+          elseif k == keys.enter then
+            local r = foc[ui._focusIndex]
+            if r then
+              local cx, cy = focus.center(r)
+              os.queueEvent("mouse_click", 1, cx, cy)
+            end
+          end
+        end
+      end
+    elseif name == "key_up" then
+      local k = ev[2]
+      if k == keys.leftCtrl or k == keys.rightCtrl then ctrlHeld = false end
+    end
+  end
+end
+
 function kernel.run()
   config.init()
   local accent = config.get("system", "accent")
@@ -225,7 +272,10 @@ function kernel.run()
     log.system("PinguOS " .. kernel.version .. surface .. " booting")
     desktopLoop(discover())
   end
-  if kernel.hd then
+  if kernel.hd and kernel.kb then
+    ui.focusEnabled = true   -- widgets may now show a focus highlight
+    parallel.waitForAny(focusManager, main, hdDaemon)
+  elseif kernel.hd then
     parallel.waitForAny(main, hdDaemon)
   else
     main()
