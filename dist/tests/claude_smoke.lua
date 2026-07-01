@@ -1,41 +1,56 @@
--- dist/tests/claude_smoke.lua  -- run in-game: wget run http://127.0.0.1:8080/fs/tests/claude_smoke.lua
--- ClaudeCraft API probe, round 2. Round 1 revealed the key set and that
--- startChannel(string) errors "boolean expected" -> startChannel takes a BOOLEAN.
--- Now: pass the boolean, complete a round-trip, and CAPTURE THE REPLY EVENT NAME(S)
--- (the one thing round 1 could not reach). NOT a unit test.
-print("=== ClaudeCraft smoke v2 ===")
+-- dist/tests/claude_smoke.lua -- ClaudeCraft probe, round 3 (post-pivot).
+-- Round 2 proved sendMessage wants a TABLE. The channel server source shows
+-- POST /message accepts {userMessage | messages | system}, reply returns via SSE
+-- (reply -> done). GOAL: find which Lua table shape sendMessage takes AND capture the
+-- CC event name the mod fires with the reply, via one real round-trip. NOT a unit test.
+print("=== ClaudeCraft smoke v3 ===")
 if type(_G.claude) ~= "table" then print("NO _G.claude"); return end
 
 local function try(label, fn, ...)
   if type(fn) ~= "function" then print(label .. ": (absent)"); return false end
   local ok, r = pcall(fn, ...)
-  print(label .. ": " .. (ok and tostring(r):sub(1, 80) or ("ERR " .. tostring(r):sub(1, 80))))
+  print(label .. ": " .. (ok and ("ok " .. tostring(r):sub(1, 40)) or ("ERR " .. tostring(r):sub(1, 55))))
   return ok, r
 end
 
-try("isApiKeyConfigured", _G.claude.isApiKeyConfigured)
-try("getModel", _G.claude.getModel)
-try("getPersonality", _G.claude.getPersonality)   -- is the system prompt set in-game?
-try("isChannelReady before", _G.claude.isChannelReady)
+_G.claude.startChannel(false)
+-- The brain connects asynchronously; poll until ready (up to ~10s).
+local ready = false
+for _ = 1, 20 do
+  if _G.claude.isChannelReady and _G.claude.isChannelReady() then ready = true; break end
+  os.sleep(0.5)
+end
+print("isChannelReady: " .. tostring(ready))
 
--- startChannel takes a boolean. false = simplest (likely native tools/web OFF -> plain
--- chat, which is what our @tool text protocol wants). Flip to true later if needed.
-try("startChannel(false)", _G.claude.startChannel, false)
-try("isChannelReady after", _G.claude.isChannelReady)
-try("sendMessage", _G.claude.sendMessage, "Say OK in exactly three words.")
+-- Try the likely table shapes; stop at the first that does NOT error (userMessage first,
+-- it is the server's canonical field).
+local msg = "Reply with exactly: OK JARVIS ONLINE"
+local shapes = {
+  { name = "{userMessage=}", val = { userMessage = msg } },
+  { name = "{messages={{role,content}}}", val = { messages = { { role = "user", content = msg } } } },
+  { name = "{text=}", val = { text = msg } },
+  { name = "{prompt=}", val = { prompt = msg } },
+  { name = "{message=}", val = { message = msg } },
+}
+local accepted
+for _, s in ipairs(shapes) do
+  if try("sendMessage " .. s.name, _G.claude.sendMessage, s.val) then accepted = s.name; break end
+end
+if not accepted then print("no table shape accepted -> signature differs"); return end
+print("accepted shape: " .. accepted)
 
-print("Listening 25s for ANY non-timer event (the reply)...")
-local t = os.startTimer(25)
+print("Listening 30s for the reply event (ignoring input noise)...")
+local t = os.startTimer(30)
 local n = 0
 while true do
   local ev = { os.pullEventRaw() }
   if ev[1] == "timer" and ev[2] == t then break end
   if ev[1] == "terminate" then break end
-  if ev[1] ~= "timer" then
+  local name = tostring(ev[1])
+  if name ~= "timer" and name ~= "key" and name ~= "key_up" and name ~= "char" and name ~= "mouse_click" and name ~= "mouse_up" then
     n = n + 1
-    print(("EV%d %s | 2=%s | 3=%s"):format(
-      n, tostring(ev[1]), tostring(ev[2]):sub(1, 50), tostring(ev[3]):sub(1, 24)))
-    if n >= 30 then print("(30 events, stopping)"); break end
+    print(("EV%d %s | 2=%s | 3=%s"):format(n, name, tostring(ev[2]):sub(1, 42), tostring(ev[3]):sub(1, 18)))
+    if n >= 25 then print("(25 events, stopping)"); break end
   end
 end
-print("=== done v2 ===")
+print("=== done v3 ===")
