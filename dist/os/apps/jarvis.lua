@@ -1,13 +1,12 @@
--- dist/os/apps/jarvis.lua -- chat UI for the JARVIS agent. Loads the jarvis modules
--- via loadfile (require is unavailable in apps) and drives agent.run.
+-- dist/os/apps/jarvis.lua -- thin chat UI over the ClaudeCraft brain. Loads claudecc via
+-- loadfile (require is unavailable in apps) and relays messages; the brain does the work.
+-- Reuses the claude.lua app pattern (titleBar -> window -> redirect -> input loop).
 return {
   id = "jarvis", name = "JARVIS", icon = "J", color = colors.cyan,
-  desc = "Asistente de la base",
+  desc = "Operador de la base",
   run = function(ctx)
     local ui = ctx.ui
-    local function load(n) return assert(loadfile("/os/jarvis/" .. n .. ".lua"))() end
-    local protocol, claudecc, tools, agent = load("protocol"), load("claudecc"), load("tools"), load("agent")
-    agent.init(protocol, claudecc, tools)
+    local claudecc = assert(loadfile("/os/jarvis/claudecc.lua"))()
 
     local worldMd = ""
     if fs.exists("/data/jarvis/world.md") then
@@ -25,12 +24,11 @@ return {
 
     local function colour(c) if term.isColour() then term.setTextColor(c) end end
     local function sanitize(s) return (s:gsub("\r", ""):gsub("[^\n\t -~]", "")) end
-    local function emit(kind, text)
-      text = sanitize(tostring(text or ""))
-      if kind == "tool" then colour(colors.lightGray); print("  [tool: " .. text .. "]")
-      elseif kind == "result" then colour(colors.gray); print("  [result: " .. text:sub(1, 2 * W) .. "]")
-      elseif kind == "answer" then colour(colors.cyan); term.write("jarvis > "); colour(colors.white); print(text)
-      elseif kind == "error" then colour(colors.red); print("error: " .. text) end
+    local function say(who, body, c)
+      colour(c); term.write(who .. " > "); colour(colors.white)
+      local lines = ui.wrap(sanitize(body), W)
+      if #lines <= 1 and (#who + 3 + #(lines[1] or "")) <= W then print(lines[1] or "")
+      else print(); for _, ln in ipairs(lines) do print(ln) end end
     end
 
     -- input line: types text; returns nil if [x] is clicked (mirrors claude.lua)
@@ -55,23 +53,52 @@ return {
       end
     end
 
+    -- print the raw reply event once, to pin the exact event name/field in-game.
+    local pinned = false
+    local function onEvent(name, ev)
+      if pinned then return end
+      pinned = true
+      colour(colors.gray)
+      print(("  [reply event: %s | f2=%s]"):format(name, tostring(ev[2]):sub(1, 28)))
+    end
+
     local ok, err = pcall(function()
       if not claudecc.available() then
         colour(colors.red); print("ClaudeCraft no detectado.")
         print("Configura /claudecraft y reabre. [x] para salir.")
         while true do
-          local ev, a, b, c = os.pullEvent()
-          if ev == "mouse_click" and ui.hit(close, b, c) then return end
-          if ev == "key" and a == keys.q then return end
+          local e, a, b, c = os.pullEvent()
+          if e == "mouse_click" and ui.hit(close, b, c) then return end
+          if e == "key" and a == keys.q then return end
         end
       end
-      print("JARVIS listo. Escribe una orden, o [x] para salir.")
+
+      colour(colors.lightGray); print("Conectando con el cerebro...")
+      local session = claudecc.open()
+      if not session.ready then
+        colour(colors.orange)
+        print("Canal no listo (isChannelReady=false). Confirma el 'trust' en la")
+        print("ventana de Claude Code; si ya lo hiciste, prueba a preguntar igual.")
+      end
+      colour(colors.cyan); print("JARVIS listo. Escribe una orden, o [x] para salir.")
+
+      local seeded = false
       while true do
         local msg = inputLine()
         if msg == nil then return end
         msg = msg:gsub("^%s+", ""):gsub("%s+$", "")
         if msg == "exit" or msg == "quit" then return
-        elseif #msg > 0 then agent.run(ctx, worldMd, msg, emit) end
+        elseif #msg > 0 then
+          local payload = msg
+          if not seeded and #worldMd > 0 then
+            payload = worldMd .. "\n\n---\nUsuario: " .. msg
+            seeded = true
+          end
+          colour(colors.gray); print("pensando...")
+          local reply, evname = claudecc.send(session, payload, onEvent)
+          if reply then say("jarvis", reply, colors.cyan)
+          else say("jarvis", "(sin respuesta: " .. tostring(evname) .. ")", colors.red) end
+        end
       end
     end)
     restore()
