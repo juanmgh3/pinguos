@@ -1,8 +1,16 @@
-# JARVIS Core — Implementation Plan (Increment 0) — v2 (pivot)
+# JARVIS Core — Implementation Plan (Increment 0)
+
+> **v3 (wrap) — what actually shipped:** in-game testing + the mod source proved that in
+> channel mode the Lua CLIENT must execute the brain's tool calls (`claude_tool_exec` →
+> `sendToolResult`), so a "thin relay" (v2 Tasks B/D) is insufficient. **Owner's decision:
+> wrap ClaudeCraft's complete rom `claude` client** instead of reimplementing it. Net changes
+> from v2: Task B's `claudecc.lua` was **removed**; Task D's app became a **launcher**
+> (`_G.shell.run("claude")`). Tasks A (remove v1) and C (`fleet_status`) stand. See the spec
+> `specs/pinguos/jarvis-core.md` (v3) for the shipped design. The tasks below are the v2
+> record; the git history (commits `f8d7c66`..`ce5d124`) reflects the wrap.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans. Read the spec
-> `specs/pinguos/jarvis-core.md` (v2) first. v1's Lua tool-loop is **removed** — the
-> ClaudeCraft brain already has a loop + native world tools (verified from the channel source).
+> `specs/pinguos/jarvis-core.md` (v3) first.
 
 **Goal:** Ship the thin JARVIS core: a `jarvis` app where you type NL, `claudecc` relays it to
 the ClaudeCraft brain, and the brain answers using its native tools + a `fleet_status` program
