@@ -34,6 +34,8 @@ const LUA_PATH = path.join(__dirname, "claude.lua");
 const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, "dist");
 const TURTLE_DIR = process.env.TURTLE_DIR || path.join(__dirname, "turtle");
 const OS_VERSION = process.env.OS_VERSION || "dev";
+// Counted in UTF-16 code units, not wire bytes: a non-ASCII body can reach
+// roughly 3x this in bytes before tripping. Bounded is the point here, not exact.
 const MAX_BODY = 64 * 1024;
 
 // Keep replies renderable on the tiny CC terminal. Appended to Claude's normal
