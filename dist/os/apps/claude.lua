@@ -62,7 +62,9 @@ return {
           ["Content-Type"] = "application/json",
           ["X-Bridge-Token"] = token,
         },
-        timeout = 120,
+        -- CC: Tweaked rejects an http timeout outside 0-60s ("timeout out of
+        -- range" at request time); 120 threw before the request was ever sent.
+        timeout = 60,
       })
       local frames, fi = "|/-\\", 1
       term.write("claude esta pensando... ")
