@@ -16,12 +16,12 @@ process.env.OS_VERSION = "9.9.9";
 process.env.PORT = "8099";
 const { server, start } = require("../claude-bridge.js");
 
-function get(p) {
+function get(p, headers) {
   // options form (not a URL string) so the path is sent verbatim — a URL
   // string would normalize "/fs/%2e%2e/x" to "/x" before it reaches the server.
   return new Promise((res) => {
     http
-      .request({ host: "127.0.0.1", port: 8099, path: p, method: "GET" }, (r) => {
+      .request({ host: "127.0.0.1", port: 8099, path: p, method: "GET", headers }, (r) => {
         let b = "";
         r.on("data", (c) => (b += c));
         r.on("end", () => res({ code: r.statusCode, body: b }));
@@ -126,4 +126,14 @@ test("POST reset works with application/json from a non-browser client", async (
   });
   assert.equal(r.code, 200);
   assert.match(r.body, /borrada/);
+});
+
+test("rejects a Host that is not loopback (DNS rebinding)", async () => {
+  const r = await get("/manifest", { Host: "evil.example" });
+  assert.equal(r.code, 403);
+});
+
+test("accepts loopback Host with a port", async () => {
+  const r = await get("/manifest", { Host: "localhost:8099" });
+  assert.equal(r.code, 200);
 });

@@ -81,7 +81,22 @@ function runClaude(prompt) {
   });
 }
 
+// DNS rebinding: a hostile page can point its own domain at 127.0.0.1, so its
+// requests reach this server looking same-origin. Pinning Host shuts that down
+// for every route at once. The CC: Tweaked client sends no Host, hence the
+// permissive nil case.
+function hostAllowed(h) {
+  if (!h) return true;
+  const name = h.startsWith("[") ? h.slice(1, h.indexOf("]")) : h.split(":")[0];
+  return name === "127.0.0.1" || name === "localhost" || name === "::1";
+}
+
 const server = http.createServer((req, res) => {
+  if (!hostAllowed(req.headers.host)) {
+    res.writeHead(403).end("bad host");
+    return;
+  }
+
   // --- OS install/update static routes ---
   if (req.method === "GET" && req.url === "/manifest") {
     res.writeHead(200, { "Content-Type": "application/json" });
