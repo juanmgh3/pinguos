@@ -17,8 +17,9 @@ process.env.OS_VERSION = "9.9.9";
 process.env.PORT = "8099";
 const { server, start } = require("../claude-bridge.js");
 
-// setHost:false suppresses Node's automatic Host header, which otherwise makes
-// the absent-Host path (the CC: Tweaked client) impossible to exercise.
+// setHost:false stops Node's client from substituting a real loopback Host.
+// The empty-Host test needs it: without it, headers: { Host: "" } is silently
+// replaced with the real one and the test asserts nothing.
 function get(p, headers, opts = {}) {
   // options form (not a URL string) so the path is sent verbatim — a URL
   // string would normalize "/fs/%2e%2e/x" to "/x" before it reaches the server.
@@ -141,11 +142,11 @@ test("accepts loopback Host with a port", async () => {
   assert.equal(r.code, 200);
 });
 
-// The in-game CC: Tweaked client sends no Host at all; rejecting it would brick
-// install/update while every Host-sending test stayed green. Driven over a raw
-// socket because Node's own server 400s a HTTP/1.1 request with no Host before
-// the handler runs — only HTTP/1.0 reaches hostAllowed with Host absent.
-test("permits an absent Host (CC: Tweaked client)", async () => {
+// The carve-out covers HTTP/1.0 clients that send no Host; whether CC: Tweaked
+// needs it is unverified. Driven over a raw socket because Node's own server
+// 400s an HTTP/1.1 request with no Host before the handler runs — only HTTP/1.0
+// reaches hostAllowed with Host absent.
+test("permits an absent Host (HTTP/1.0 client)", async () => {
   const line = await new Promise((res) => {
     const s = net.connect(8099, "127.0.0.1", () => s.write("GET /manifest HTTP/1.0\r\n\r\n"));
     let b = "";
