@@ -23,6 +23,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const crypto = require("node:crypto");
 const { toTerminalAscii } = require("./bridge/ascii");
 const { buildManifest } = require("./bridge/manifest");
 const { installScript, gpsHostScript, turtleBootstrapScript } = require("./bridge/install");
@@ -37,6 +38,20 @@ const OS_VERSION = process.env.OS_VERSION || "dev";
 // Counted in UTF-16 code units, not wire bytes: a non-ASCII body can reach
 // roughly 3x this in bytes before tripping. Bounded is the point here, not exact.
 const MAX_BODY = 64 * 1024;
+
+// POST / drives a tool-capable Claude, so reaching it must take a secret. The
+// installer bakes this into the generated client, which keeps the one-line
+// in-game install working. Handing it out over an open GET is deliberate: a
+// hostile page cannot read a cross-origin GET body without CORS, and that page
+// is the attacker this defends against.
+const TOKEN = process.env.BRIDGE_TOKEN || crypto.randomBytes(16).toString("hex");
+
+// Constant-time compare so a wrong token leaks nothing through response timing.
+function tokenOk(given) {
+  const a = Buffer.from(String(given || ""));
+  const b = Buffer.from(TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 // Keep replies renderable on the tiny CC terminal. Appended to Claude's normal
 // system prompt (so it still has your Claude Code context), not a replacement.
@@ -196,6 +211,10 @@ const server = http.createServer((req, res) => {
     res.writeHead(403).end("cross-origin blocked");
     return;
   }
+  if (!tokenOk(req.headers["x-bridge-token"])) {
+    res.writeHead(401).end("bad or missing token");
+    return;
+  }
   let body = "";
   let tooBig = false;
   req.on("data", (c) => {
@@ -256,10 +275,11 @@ function start() {
       console.log(`claude-bridge listening on http://127.0.0.1:${PORT}`);
       console.log(`workdir: ${WORKDIR}  |  dist: ${DIST_DIR}  |  os: ${OS_VERSION}`);
       console.log("install in-game: wget run http://127.0.0.1:" + PORT + "/install");
+      console.log(`token: ${TOKEN}`);
       resolve(server);
     });
   });
 }
 
 if (require.main === module) start();
-module.exports = { server, start };
+module.exports = { server, start, TOKEN };

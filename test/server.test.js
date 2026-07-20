@@ -15,6 +15,7 @@ fs.writeFileSync(path.join(dist, "os", "kernel.lua"), "return {}");
 process.env.DIST_DIR = dist;
 process.env.OS_VERSION = "9.9.9";
 process.env.PORT = "8099";
+process.env.BRIDGE_TOKEN = "test-token";
 const { server, start } = require("../claude-bridge.js");
 
 // setHost:false stops Node's client from substituting a real loopback Host.
@@ -127,9 +128,33 @@ test("POST chat rejects a cross-origin Origin (anti-CSRF)", async () => {
 test("POST reset works with application/json from a non-browser client", async () => {
   const r = await post("/", JSON.stringify({ reset: true }), {
     "Content-Type": "application/json",
+    "X-Bridge-Token": "test-token",
   });
   assert.equal(r.code, 200);
   assert.match(r.body, /borrada/);
+});
+
+test("POST chat rejects a missing token", async () => {
+  const r = await post("/", JSON.stringify({ reset: true }), {
+    "Content-Type": "application/json",
+  });
+  assert.equal(r.code, 401);
+});
+
+test("POST chat rejects a wrong token", async () => {
+  const r = await post("/", JSON.stringify({ reset: true }), {
+    "Content-Type": "application/json",
+    "X-Bridge-Token": "wrong-token",
+  });
+  assert.equal(r.code, 401);
+});
+
+test("POST chat rejects a same-length wrong token (reaches timingSafeEqual)", async () => {
+  const r = await post("/", JSON.stringify({ reset: true }), {
+    "Content-Type": "application/json",
+    "X-Bridge-Token": "xest-token",
+  });
+  assert.equal(r.code, 401);
 });
 
 test("rejects a Host that is not loopback (DNS rebinding)", async () => {
@@ -174,6 +199,7 @@ test("accepts an uppercase loopback Host (Host is case-insensitive)", async () =
 test("POST rejects a body over the size cap", async () => {
   const r = await post("/", JSON.stringify({ prompt: "x".repeat(70 * 1024) }), {
     "Content-Type": "application/json",
+    "X-Bridge-Token": "test-token",
   });
   assert.equal(r.code, 413);
 });
