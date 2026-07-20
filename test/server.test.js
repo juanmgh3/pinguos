@@ -149,6 +149,14 @@ test("POST chat rejects a wrong token", async () => {
   assert.equal(r.code, 401);
 });
 
+test("POST chat rejects a same-length wrong token (reaches timingSafeEqual)", async () => {
+  const r = await post("/", JSON.stringify({ reset: true }), {
+    "Content-Type": "application/json",
+    "X-Bridge-Token": "xest-token",
+  });
+  assert.equal(r.code, 401);
+});
+
 test("rejects a Host that is not loopback (DNS rebinding)", async () => {
   const r = await get("/manifest", { Host: "evil.example" });
   assert.equal(r.code, 403);
