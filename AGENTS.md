@@ -52,6 +52,9 @@ Local Lua 5.4 is at `C:\Users\juanm\AppData\Local\Programs\Lua\bin\lua.exe`
   cross-origin (anti-CSRF) — it drives a tool-capable Claude.
 - Lua must run on **CC's Lua 5.1** and local **5.4**: use `math.atan2 or math.atan`,
   and `math.floor` before `string.format("%d", n)` (5.3+ rejects float `%d`).
+- **`http.request` timeout must be 0-60s.** CC rejects anything outside that range
+  with "timeout out of range" at request time, before the request is ever sent.
+  `dist/os/apps/claude.lua` used 120 and never reached the bridge; it is 60 now.
 
 ## Environment
 
