@@ -177,3 +177,15 @@ test("POST rejects a body over the size cap", async () => {
   });
   assert.equal(r.code, 413);
 });
+
+// Skipped on Windows: fs.symlinkSync throws EPERM without admin rights there,
+// so this case is proved by CI on Linux, not locally.
+test("GET /fs blocks a symlink that escapes the dist dir", {
+  skip: process.platform === "win32" ? "symlinks need admin rights on Windows" : false,
+}, async () => {
+  const outside = path.join(os.tmpdir(), "pinguos-outside.txt");
+  fs.writeFileSync(outside, "not yours");
+  fs.symlinkSync(outside, path.join(dist, "escape.lua"));
+  const r = await get("/fs/escape.lua");
+  assert.equal(r.code, 404);
+});
