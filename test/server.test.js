@@ -84,6 +84,7 @@ test("GET /install bakes the token into the config it writes", async () => {
   assert.match(r.body, /test-token/);
   assert.match(r.body, /bridgeToken/);
   assert.match(r.body, /cfg\/system\.json/);
+  assert.match(r.body, /fs\.move/);
 });
 
 test("GET /claude.lua bakes the token into the standalone client", async () => {

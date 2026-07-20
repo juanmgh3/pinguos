@@ -44,6 +44,9 @@ const MAX_BODY = 64 * 1024;
 // in-game install working. Handing it out over an open GET is deliberate: a
 // hostile page cannot read a cross-origin GET body without CORS, and that page
 // is the attacker this defends against.
+// The value is spliced unescaped into generated Lua (the installer and the served
+// claude.lua), so a token set via BRIDGE_TOKEN must stay quote-safe: hex or
+// alphanumeric. The generated default already is.
 const TOKEN = process.env.BRIDGE_TOKEN || crypto.randomBytes(16).toString("hex");
 
 // Constant-time compare so a wrong token leaks nothing through response timing.
