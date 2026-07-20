@@ -81,7 +81,35 @@ function runClaude(prompt) {
   });
 }
 
+// DNS rebinding: a hostile page can point its own domain at 127.0.0.1, so its
+// requests reach this server looking same-origin. Pinning Host shuts that down
+// for every route at once.
+//
+// The absent case is permitted, but node answers 400 to an HTTP/1.1 request
+// carrying no Host before this function ever runs, so that branch only covers
+// HTTP/1.0 clients. Whether CC: Tweaked needs it is unverified — it works
+// either way, since an HTTP/1.1 client sends Host: 127.0.0.1:<port>, which is
+// allowed. An empty Host value is not absent and is rejected.
+function hostAllowed(h) {
+  if (h === undefined) return true;
+  let name;
+  if (h.startsWith("[")) {
+    const end = h.indexOf("]");
+    if (end === -1) return false;
+    name = h.slice(1, end);
+  } else {
+    name = h.split(":")[0];
+  }
+  name = name.toLowerCase();
+  return name === "127.0.0.1" || name === "localhost" || name === "::1";
+}
+
 const server = http.createServer((req, res) => {
+  if (!hostAllowed(req.headers.host)) {
+    res.writeHead(403).end("bad host");
+    return;
+  }
+
   // --- OS install/update static routes ---
   if (req.method === "GET" && req.url === "/manifest") {
     res.writeHead(200, { "Content-Type": "application/json" });
