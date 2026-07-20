@@ -90,6 +90,10 @@ CI runs on Linux, so the case is covered where it matters.
 Each fix lands test-first. The anti-CSRF tests in `test/server.test.js` are the
 natural home for F1–F3.
 
+`SECURITY.md` states all of this in the open: what the bridge is, the four
+defences, what it deliberately does not defend against, and where to report.
+A public repo that teaches people to run a local server owes them that.
+
 ## 2. CI
 
 One workflow, `.github/workflows/ci.yml`, three jobs in parallel:
