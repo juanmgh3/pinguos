@@ -136,7 +136,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === "GET" && req.url === "/install") {
     res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end(installScript(`http://127.0.0.1:${PORT}`));
+    res.end(installScript(`http://127.0.0.1:${PORT}`, TOKEN));
     return;
   }
   if (req.method === "GET" && req.url === "/gpshost") {
@@ -184,7 +184,7 @@ const server = http.createServer((req, res) => {
         return;
       }
       res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end(data);
+      res.end(data.replace('local TOKEN = ""', `local TOKEN = "${TOKEN}"`));
       console.log("served claude.lua");
     });
     return;

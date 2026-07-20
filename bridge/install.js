@@ -1,7 +1,8 @@
 // bridge/install.js
-function installScript(baseUrl) {
+function installScript(baseUrl, token) {
   return `-- PinguOS installer (auto-generated)
 local BASE = "${baseUrl}"
+local TOKEN = "${token}"
 local function getJSON(url)
   local h = http.get(url); if not h then error("no manifest: "..url) end
   local s = h.readAll(); h.close(); return textutils.unserialiseJSON(s)
@@ -17,6 +18,19 @@ for _, f in ipairs(m.files) do
   local out = fs.open(f.path, "w"); out.write(data); out.close()
   print("  "..f.path)
 end
+-- Merge the bridge token into the OS settings file. Read-modify-write, so an
+-- update does not wipe accent, wallpaper or hdScale.
+local CFG = "/cfg/system.json"
+local cfg = {}
+if fs.exists(CFG) then
+  local ch = fs.open(CFG, "r"); local craw = ch.readAll(); ch.close()
+  local cok, parsed = pcall(textutils.unserialiseJSON, craw)
+  if cok and type(parsed) == "table" then cfg = parsed end
+end
+if type(cfg.system) ~= "table" then cfg.system = {} end
+cfg.system.bridgeToken = TOKEN
+if not fs.exists("/cfg") then fs.makeDir("/cfg") end
+local cf = fs.open(CFG, "w"); cf.write(textutils.serialiseJSON(cfg)); cf.close()
 print("PinguOS "..(m.version or "?").." installed. Rebooting...")
 sleep(1)
 os.reboot()

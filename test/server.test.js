@@ -78,6 +78,20 @@ test("GET /install returns a lua bootstrap", async () => {
   assert.match(r.body, /os\.reboot\(\)/);
 });
 
+test("GET /install bakes the token into the config it writes", async () => {
+  const r = await get("/install");
+  assert.equal(r.code, 200);
+  assert.match(r.body, /test-token/);
+  assert.match(r.body, /bridgeToken/);
+  assert.match(r.body, /cfg\/system\.json/);
+});
+
+test("GET /claude.lua bakes the token into the standalone client", async () => {
+  const r = await get("/claude.lua");
+  assert.equal(r.code, 200);
+  assert.match(r.body, /local TOKEN = "test-token"/);
+});
+
 test("GET /gpshost returns a GPS host setup script", async () => {
   const r = await get("/gpshost");
   assert.equal(r.code, 200);
