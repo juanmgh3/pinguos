@@ -83,8 +83,13 @@ function runClaude(prompt) {
 
 // DNS rebinding: a hostile page can point its own domain at 127.0.0.1, so its
 // requests reach this server looking same-origin. Pinning Host shuts that down
-// for every route at once. The CC: Tweaked client sends no Host, hence the
-// permissive absent case — absent only, an empty Host value is not absent.
+// for every route at once.
+//
+// The absent case is permitted, but node answers 400 to an HTTP/1.1 request
+// carrying no Host before this function ever runs, so that branch only covers
+// HTTP/1.0 clients. Whether CC: Tweaked needs it is unverified — it works
+// either way, since an HTTP/1.1 client sends Host: 127.0.0.1:<port>, which is
+// allowed. An empty Host value is not absent and is rejected.
 function hostAllowed(h) {
   if (h === undefined) return true;
   let name;
