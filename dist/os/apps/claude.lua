@@ -5,6 +5,7 @@ return {
   run = function(ctx)
     local ui = ctx.ui
     local url = ctx.sys.getSetting("bridgeUrl", "http://127.0.0.1:8080")
+    local token = ctx.sys.getSetting("bridgeToken", "")
     local W, H = term.getSize()
     ui.clear()
     local close = ui.titleBar("Claude")           -- fixed on row 1 of the main term
@@ -57,7 +58,13 @@ return {
     local function request(bodyTable)
       http.request({
         url = url, body = textutils.serialiseJSON(bodyTable),
-        headers = { ["Content-Type"] = "application/json" }, timeout = 120,
+        headers = {
+          ["Content-Type"] = "application/json",
+          ["X-Bridge-Token"] = token,
+        },
+        -- CC: Tweaked rejects an http timeout outside 0-60s ("timeout out of
+        -- range" at request time); 120 threw before the request was ever sent.
+        timeout = 60,
       })
       local frames, fi = "|/-\\", 1
       term.write("claude esta pensando... ")

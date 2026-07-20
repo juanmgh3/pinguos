@@ -10,6 +10,7 @@
 --   * CC:T http rules allowing 127.0.0.1 (NOT allowed by default -- see notes)
 
 local URL = "http://127.0.0.1:8080"
+local TOKEN = ""
 
 if not http then
   printError("HTTP API is disabled. Set http.enabled = true in the CC:T config.")
@@ -28,7 +29,10 @@ while true do
 
   if #msg > 0 then
     local body = textutils.serialiseJSON({ prompt = msg })
-    local res, errmsg = http.post(URL, body, { ["Content-Type"] = "application/json" })
+    local res, errmsg = http.post(URL, body, {
+      ["Content-Type"] = "application/json",
+      ["X-Bridge-Token"] = TOKEN,
+    })
 
     if not res then
       printError("request failed: " .. tostring(errmsg))

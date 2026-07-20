@@ -1,7 +1,8 @@
 // bridge/install.js
-function installScript(baseUrl) {
+function installScript(baseUrl, token) {
   return `-- PinguOS installer (auto-generated)
 local BASE = "${baseUrl}"
+local TOKEN = "${token}"
 local function getJSON(url)
   local h = http.get(url); if not h then error("no manifest: "..url) end
   local s = h.readAll(); h.close(); return textutils.unserialiseJSON(s)
@@ -17,6 +18,29 @@ for _, f in ipairs(m.files) do
   local out = fs.open(f.path, "w"); out.write(data); out.close()
   print("  "..f.path)
 end
+-- Merge the bridge token into the OS settings file. Read-modify-write, so an
+-- update does not wipe accent, wallpaper or hdScale.
+local CFG = "/cfg/system.json"
+local cfg = {}
+if fs.exists(CFG) then
+  local ch = fs.open(CFG, "r"); local craw = ch.readAll(); ch.close()
+  local cok, parsed = pcall(textutils.unserialiseJSON, craw)
+  if cok and type(parsed) == "table" then
+    cfg = parsed
+  else
+    -- Corrupt config: keep it for inspection, same as the OS loader (config.lua),
+    -- rather than clobbering it. cfg stays {} and a fresh file is written below.
+    pcall(fs.delete, CFG..".bad")
+    pcall(fs.move, CFG, CFG..".bad")
+  end
+end
+if type(cfg.system) ~= "table" then cfg.system = {} end
+cfg.system.bridgeToken = TOKEN
+if not fs.exists("/cfg") then fs.makeDir("/cfg") end
+local ctmp = CFG..".tmp"
+local cf = fs.open(ctmp, "w"); cf.write(textutils.serialiseJSON(cfg)); cf.close()
+if fs.exists(CFG) then fs.delete(CFG) end
+fs.move(ctmp, CFG)
 print("PinguOS "..(m.version or "?").." installed. Rebooting...")
 sleep(1)
 os.reboot()

@@ -44,6 +44,9 @@ const MAX_BODY = 64 * 1024;
 // in-game install working. Handing it out over an open GET is deliberate: a
 // hostile page cannot read a cross-origin GET body without CORS, and that page
 // is the attacker this defends against.
+// The value is spliced unescaped into generated Lua (the installer and the served
+// claude.lua), so a token set via BRIDGE_TOKEN must stay quote-safe: hex or
+// alphanumeric. The generated default already is.
 const TOKEN = process.env.BRIDGE_TOKEN || crypto.randomBytes(16).toString("hex");
 
 // Constant-time compare so a wrong token leaks nothing through response timing.
@@ -136,7 +139,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === "GET" && req.url === "/install") {
     res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end(installScript(`http://127.0.0.1:${PORT}`));
+    res.end(installScript(`http://127.0.0.1:${PORT}`, TOKEN));
     return;
   }
   if (req.method === "GET" && req.url === "/gpshost") {
@@ -184,7 +187,7 @@ const server = http.createServer((req, res) => {
         return;
       }
       res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end(data);
+      res.end(data.replace('local TOKEN = ""', `local TOKEN = "${TOKEN}"`));
       console.log("served claude.lua");
     });
     return;
