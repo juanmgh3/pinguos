@@ -84,10 +84,18 @@ function runClaude(prompt) {
 // DNS rebinding: a hostile page can point its own domain at 127.0.0.1, so its
 // requests reach this server looking same-origin. Pinning Host shuts that down
 // for every route at once. The CC: Tweaked client sends no Host, hence the
-// permissive nil case.
+// permissive absent case — absent only, an empty Host value is not absent.
 function hostAllowed(h) {
-  if (!h) return true;
-  const name = h.startsWith("[") ? h.slice(1, h.indexOf("]")) : h.split(":")[0];
+  if (h === undefined) return true;
+  let name;
+  if (h.startsWith("[")) {
+    const end = h.indexOf("]");
+    if (end === -1) return false;
+    name = h.slice(1, end);
+  } else {
+    name = h.split(":")[0];
+  }
+  name = name.toLowerCase();
   return name === "127.0.0.1" || name === "localhost" || name === "::1";
 }
 
