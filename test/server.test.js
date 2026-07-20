@@ -170,3 +170,10 @@ test("accepts an uppercase loopback Host (Host is case-insensitive)", async () =
   const r = await get("/manifest", { Host: "LOCALHOST:8099" });
   assert.equal(r.code, 200);
 });
+
+test("POST rejects a body over the size cap", async () => {
+  const r = await post("/", JSON.stringify({ prompt: "x".repeat(70 * 1024) }), {
+    "Content-Type": "application/json",
+  });
+  assert.equal(r.code, 413);
+});
