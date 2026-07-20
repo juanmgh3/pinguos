@@ -206,9 +206,10 @@ Whether a self-review counts as a contribution is undocumented: the profile
 contributions reference lists "Submitting a pull request review" as sometimes
 counting and gives no condition about who authored the PR.
 
-So measure it. On one phase-1 PR, leave a review of type Comment, then check the
-contribution graph the next day and record the answer here. One PR, one fact,
-no guessing.
+Measured 2026-07-21: a Comment review left on my own PR #8 kept
+`totalPullRequestReviewContributions` at 0 a day later, so self-reviews do not
+count toward that stat — the only path to it is other people reviewing, which
+starts in phase 2.
 
 Pull Shark needs no effort: x1 is 2 merged PRs, x2 is 16, and you can merge your
 own. Phase 1 alone produces more than 2. It falls out of working in PRs, which
