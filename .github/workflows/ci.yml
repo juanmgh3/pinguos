@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '24'
+      - run: node --test
+
+  lua:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - run: sudo apt-get update && sudo apt-get install -y lua5.4
+      - run: lua5.4 dist/tests/run.lua
+      - run: lua5.4 turtle/tests/run.lua
+
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - run: sudo apt-get update && sudo apt-get install -y lua5.1 lua5.4
+      - name: Tools are present
+        run: which luac5.1 luac5.4
+      - name: Parse under 5.1, the version CC runs
+        run: find . -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -r -n1 luac5.1 -p
+      - name: Parse under 5.4, the version the dev machine runs
+        run: find . -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -r -n1 luac5.4 -p
